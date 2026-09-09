@@ -1,0 +1,251 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Sign the manifest and publish it, with the binaries it describes.
+#
+# # What is signed, and what is not
+#
+# One file: `manifest.json`. It names every artefact, its size and both its
+# digests, so a signature over it is a signature over the whole set. Signing 800
+# files individually would produce 800 signatures a reader will not check and
+# would still leave the *collection* unsigned, so a file could be removed from a
+# release without any signature failing.
+#
+# The binaries themselves are not signed. `SHA256SUMS` is published beside the
+# manifest for people whose habits are built around `sha256sum -c`, and it is
+# generated from the manifest rather than separately, so the two cannot drift.
+#
+# # The private key
+#
+# It is not in this repository and never will be. CI reads it from an encrypted
+# repository secret, which is absent on forks: a fork's build produces every
+# artefact and no signature, and says so, rather than failing in a way that
+# looks like a broken build.
+
+name: release
+
+on:
+  workflow_call:
+    inputs:
+      upstream_release:
+        type: string
+        required: false
+      manifest_artifact:
+        type: string
+        default: manifest
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: false
+      GPG_PASSPHRASE:
+        required: false
+  workflow_dispatch:
+    inputs:
+      upstream_release:
+        description: 'Upstream Ventoy tag this build corresponds to'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: sign and publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      # `secrets` is not available in a step-level `if`, so presence is
+      # surfaced here as a plain string and tested as one below.
+      HAS_SIGNING_KEY: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.manifest_artifact || 'manifest' }}
+          path: release
+
+      - name: Collect the built binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blobs-one
+          path: artifacts
+        continue-on-error: true
+
+      - name: Work out the tag
+        id: tag
+        run: |
+          upstream='${{ inputs.upstream_release }}'
+          [ -n "$upstream" ] || upstream='unreleased'
+
+          # `+repro.N` rather than a version of our own. The upstream version is
+          # the thing a user is actually looking for, and inventing a parallel
+          # numbering means nobody can tell which Ventoy they are getting.
+          n=1
+          while gh release view "${upstream}+repro.${n}" \
+                  --repo '${{ github.repository }}' >/dev/null 2>&1; do
+            n=$((n + 1))
+          done
+          echo "tag=${upstream}+repro.${n}" >> "$GITHUB_OUTPUT"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "tag will be ${upstream}+repro.${n}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # SHA256SUMS is derived from the manifest rather than computed separately,
+      # so the two can never disagree. A reader who checks only the sums is
+      # checking the same numbers the signature covers.
+      - name: Write SHA256SUMS from the manifest
+        run: |
+          cd release
+          python3 - <<'PY'
+          import json
+
+          with open("manifest.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+
+          lines = []
+          for entry in manifest["entries"]:
+              # Entries that were never built carry a placeholder digest of all
+              # zeroes. Writing that into SHA256SUMS would invite somebody to
+              # "verify" a file that does not exist.
+              if entry["sha256"] == "0" * 64:
+                  continue
+              lines.append(f"{entry['sha256']}  {entry['path']}")
+
+          with open("SHA256SUMS", "w", encoding="utf-8", newline="\n") as handle:
+              handle.write("\n".join(lines) + "\n")
+
+          print(f"{len(lines)} entries written to SHA256SUMS")
+          PY
+
+      - name: Import the signing key
+        id: gpg
+        if: env.HAS_SIGNING_KEY == 'true'
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          chmod 700 "$GNUPGHOME"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+          printf '%s' '${{ secrets.GPG_PRIVATE_KEY }}' | gpg --batch --import
+          fpr=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          echo "fingerprint=$fpr" >> "$GITHUB_OUTPUT"
+          echo "imported $fpr"
+
+          # Trust the key we just imported, otherwise gpg refuses to use it
+          # without an interactive prompt that has nowhere to appear.
+          printf '%s:6:\n' "$fpr" | gpg --batch --import-ownertrust
+
+      - name: Sign the manifest and the sums
+        if: steps.gpg.outputs.fingerprint != ''
+        run: |
+          cd release
+          for file in manifest.json SHA256SUMS; do
+            gpg --batch --yes --pinentry-mode loopback \
+                --passphrase-fd 0 \
+                --armor --detach-sign \
+                --digest-algo SHA512 \
+                --output "$file.asc" "$file" <<< '${{ secrets.GPG_PASSPHRASE }}'
+            echo "signed $file"
+          done
+
+          # Publish the public key beside the signatures. A reader still has to
+          # decide whether that key is the maintainer's, and the README says how
+          # to check the fingerprint against a second source.
+          gpg --armor --export '${{ steps.gpg.outputs.fingerprint }}' > signing-key.asc
+
+      # Verify with our own tool before publishing, not after. A release whose
+      # signature does not check out must never reach the release page, and the
+      # cheapest place to catch that is here.
+      - name: Check the signature we just made
+        if: steps.gpg.outputs.fingerprint != ''
+        run: |
+          cd tools/ventoy-verify
+          cargo build --release --locked -p ventoy-verify-cli
+          cd ../..
+          ./tools/ventoy-verify/target/release/ventoy-verify signature \
+            release/manifest.json \
+            --key release/signing-key.asc
+
+      - name: Say so if this build is unsigned
+        if: steps.gpg.outputs.fingerprint == ''
+        run: |
+          echo "::warning::no signing key is available, so this build is unsigned"
+          {
+            echo "> **This build is not signed.**"
+            echo ">"
+            echo "> The signing key is a repository secret and is absent here,"
+            echo "> which is the expected state on a fork. Every artefact is"
+            echo "> present and the manifest is complete; what is missing is the"
+            echo "> maintainer's attestation that this is the build they made."
+          } > release/UNSIGNED.md
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/manifest.json
+            release/SHA256SUMS
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(cat <<'HEADER'
+          Built by GitHub Actions from source, in a container pinned by digest,
+          with every toolchain pinned by SHA-256. Nothing in this release was
+          compiled on anybody's laptop.
+
+          ## How to check this release
+
+          ```bash
+          ventoy-verify release --key signing-key.asc
+          ```
+
+          That checks the signature over `manifest.json`, then checks every file
+          the manifest names. It has no keyring: a signature made by any key
+          other than the one you pass is a failure, not a warning.
+
+          Without the tool, and checking rather less:
+
+          ```bash
+          gpg --verify SHA256SUMS.asc SHA256SUMS
+          sha256sum -c SHA256SUMS
+          ```
+
+          ## What this release does and does not prove
+
+          It proves these bytes follow from this source under this toolchain,
+          and that two independent builds agreed. It does not prove the source
+          is safe, and it does not prove the compiler is honest.
+
+          `reproducibility-report.md` in this release lists, by name, every file
+          that did not reproduce and every file this project could not build at
+          all. Read it before relying on any of this.
+          HEADER
+          )
+
+          {
+            echo "$notes"
+            echo
+            cat release/reproducibility-report.md
+          } > /tmp/notes.md
+
+          gh release create '${{ steps.tag.outputs.tag }}' \
+            --repo '${{ github.repository }}' \
+            --title 'Ventoy ${{ steps.tag.outputs.upstream }}, rebuilt' \
+            --notes-file /tmp/notes.md \
+            release/*
+
+      - name: Remove the key material from the runner
+        if: always() && env.GNUPGHOME != ''
+        run: |
+          # The runner is discarded anyway. Doing this explicitly means a change
+          # to self-hosted runners later does not silently leave a private key
+          # in a temp directory.
+          gpgconf --kill all 2>/dev/null || true
+          rm -rf "$GNUPGHOME"
+          echo "signing material removed"

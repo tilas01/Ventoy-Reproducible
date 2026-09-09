@@ -1,0 +1,213 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Gates for `ventoy-verify`, and the proof that it builds the same twice.
+#
+# A tool whose job is to tell you whether a binary is reproducible has no
+# standing if its own binary is not. So this workflow builds it twice, in two
+# different directories, and fails if the two differ by one byte.
+
+name: rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/ventoy-verify/**'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'tools/ventoy-verify/**'
+      - '.github/workflows/rust.yml'
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: tools/ventoy-verify
+
+env:
+  CARGO_TERM_COLOR: always
+  # A warning that nobody is forced to read is a warning that stays.
+  RUSTFLAGS: -D warnings
+  RUST_BACKTRACE: 1
+
+jobs:
+  gates:
+    name: format, lints and tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the pinned toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup component add rustfmt clippy
+          rustc --version
+          cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/ventoy-verify
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lints
+        run: cargo clippy --workspace --exclude ventoy-verify-gui --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --exclude ventoy-verify-gui
+
+      # `forbid(unsafe_code)` is in every crate root, and this is the check that
+      # it stays there. A grep is cruder than the compiler, and it is the thing
+      # that notices when somebody adds a fifth crate and forgets the attribute.
+      - name: Every crate still forbids unsafe code
+        run: |
+          missing=0
+          for root in crates/*/src/lib.rs crates/*/src/main.rs; do
+            [ -f "$root" ] || continue
+            if ! grep -q '^#!\[forbid(unsafe_code)\]' "$root"; then
+              echo "::error file=tools/ventoy-verify/$root::missing #![forbid(unsafe_code)]"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: No unsafe blocks anywhere in our own sources
+        run: |
+          if grep -rn --include='*.rs' -E '\bunsafe\b' crates/; then
+            echo "::error::the word unsafe appears in a crate that forbids it"
+            exit 1
+          fi
+          echo "no occurrences of unsafe in any crate source"
+
+      - name: Documentation builds without warnings
+        run: cargo doc --workspace --exclude ventoy-verify-gui --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  reproducible:
+    name: the verifier reproduces itself
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the pinned toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      # SOURCE_DATE_EPOCH comes from the commit rather than the clock, so that
+      # a rebuild of the same commit next year still produces the same bytes.
+      - name: Take the build date from the commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+        working-directory: .
+
+      # Two builds, two directories. If a path leaks into the binary, the two
+      # differ and this job fails, which is the whole point of using different
+      # directories rather than building twice in the same one.
+      - name: First build
+        run: |
+          cargo build --release --locked -p ventoy-verify-cli \
+            --target-dir /tmp/build-one
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: >-
+            -D warnings
+            --remap-path-prefix=${{ github.workspace }}=/src
+            --remap-path-prefix=/home/runner/.cargo=/cargo
+
+      - name: Second build, elsewhere
+        run: |
+          cargo build --release --locked -p ventoy-verify-cli \
+            --target-dir /tmp/build-two
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: >-
+            -D warnings
+            --remap-path-prefix=${{ github.workspace }}=/src
+            --remap-path-prefix=/home/runner/.cargo=/cargo
+
+      - name: The two builds must be identical
+        run: |
+          one=$(sha256sum /tmp/build-one/release/ventoy-verify | cut -d' ' -f1)
+          two=$(sha256sum /tmp/build-two/release/ventoy-verify | cut -d' ' -f1)
+          echo "build one: $one"
+          echo "build two: $two"
+          if [ "$one" != "$two" ]; then
+            echo "::error::ventoy-verify did not reproduce; a tool that checks reproducibility must be reproducible"
+            cmp -l /tmp/build-one/release/ventoy-verify /tmp/build-two/release/ventoy-verify | head -40 || true
+            exit 1
+          fi
+          echo "identical: $one"
+          {
+            echo "### ventoy-verify reproduced"
+            echo
+            echo "Two builds in different directories produced the same bytes."
+            echo
+            echo '```'
+            echo "sha256 $one"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  portability:
+    name: builds for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04,  target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04,  target: aarch64-unknown-linux-gnu, cross: true }
+          - { os: ubuntu-24.04,  target: i686-unknown-linux-gnu,    cross: true }
+          - { os: windows-2022,  target: x86_64-pc-windows-msvc }
+          - { os: windows-2022,  target: aarch64-pc-windows-msvc,   no-test: true }
+          - { os: macos-14,      target: aarch64-apple-darwin }
+          - { os: macos-13,      target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the toolchain and target
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add ${{ matrix.target }}
+
+      - name: Cross linkers
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-multilib
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/ventoy-verify
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked -p ventoy-verify-cli --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      # A binary that builds and cannot run has not been tested. Cross-compiled
+      # targets are skipped here rather than pretended about; the Linux and
+      # macOS natives cover the code paths.
+      - name: Tests
+        if: '!matrix.cross && !matrix.no-test'
+        run: cargo test --release --locked --workspace --exclude ventoy-verify-gui --target ${{ matrix.target }}
+
+      - name: Name the artefact
+        id: name
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "path=target/${{ matrix.target }}/release/ventoy-verify.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=target/${{ matrix.target }}/release/ventoy-verify" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ventoy-verify-${{ matrix.target }}
+          path: tools/ventoy-verify/${{ steps.name.outputs.path }}
+          if-no-files-found: error

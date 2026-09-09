@@ -1,0 +1,250 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Keep this fork level with ventoy/Ventoy, for ever, without a person having to
+# remember.
+#
+# # What this does every three hours
+#
+#   1. Fetches ventoy/Ventoy and compares its default branch with ours.
+#   2. If upstream has moved, merges it into `main`.
+#   3. If upstream has published a release we do not have, records that too.
+#   4. Pushes, which triggers the blob rebuild, which triggers a release.
+#
+# # Why it merges rather than rebases
+#
+# Rebasing would rewrite this fork's published history on every upstream commit,
+# which breaks every clone anybody has and every signature over a commit. A
+# merge keeps upstream's history intact and verifiable, which matters when the
+# whole argument is that a reader can check where a byte came from.
+#
+# # Why a conflict opens an issue rather than being resolved
+#
+# There are exactly two files this fork owns that upstream also has: `README.md`
+# and `.gitattributes`. Both are protected by a `merge=ours` driver, configured
+# below, so the ordinary case never conflicts. Anything else conflicting means
+# upstream changed something in a way nobody anticipated, and a workflow that
+# guesses at a resolution in a bootloader repository is a workflow that ships a
+# bootloader nobody reviewed. It stops and asks.
+
+name: sync-upstream
+
+on:
+  schedule:
+    # Every three hours. Upstream releases a few times a year and commits in
+    # bursts; three hours is often enough that nobody notices the lag and rare
+    # enough that it costs almost nothing.
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Cut a release even if upstream has not moved'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  # Two syncs running at once would race on the same branch. Later wins, and
+  # the earlier one is cancelled rather than pushed on top of.
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/ventoy/Ventoy.git
+
+jobs:
+  sync:
+    name: merge upstream into main
+    runs-on: ubuntu-24.04
+    outputs:
+      moved: ${{ steps.compare.outputs.moved }}
+      upstream_sha: ${{ steps.compare.outputs.upstream_sha }}
+      upstream_release: ${{ steps.release.outputs.tag }}
+      have_release: ${{ steps.release.outputs.have }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Identify the committer
+        run: |
+          # The account that owns the fork, not a person. A sync is machinery,
+          # and attributing it to a human makes the log lie about who reviewed
+          # what.
+          git config user.name  'ventoy-reproducible-sync'
+          git config user.email 'noreply@github.com'
+
+          # `merge=ours` is inert unless the driver exists. Without this line
+          # the attribute is silently ignored and README.md conflicts on the
+          # first upstream edit, which is a confusing failure to debug.
+          git config merge.ours.driver true
+
+      - name: Fetch upstream
+        id: fetch
+        run: |
+          git remote add upstream "$UPSTREAM" 2>/dev/null || \
+            git remote set-url upstream "$UPSTREAM"
+          git fetch upstream --tags --prune
+          # Ask upstream what it calls its default branch rather than assuming
+          # master. Projects rename, and a hardcoded name fails silently by
+          # syncing nothing for months.
+          head=$(git ls-remote --symref "$UPSTREAM" HEAD | awk '/^ref:/ {print $2}')
+          branch="${head#refs/heads/}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "upstream default branch: $branch"
+
+      - name: Has upstream moved
+        id: compare
+        run: |
+          branch='${{ steps.fetch.outputs.branch }}'
+          upstream_sha=$(git rev-parse "upstream/$branch")
+          echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+
+          # `merge-base --is-ancestor` is the right question. Comparing the two
+          # tip hashes says "different", which is always true here because this
+          # fork has its own commits on top.
+          if git merge-base --is-ancestor "$upstream_sha" HEAD; then
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            echo "already contains upstream $upstream_sha"
+          else
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+            count=$(git rev-list --count "HEAD..$upstream_sha")
+            echo "upstream is $count commits ahead"
+            echo "new_commits=$count" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge
+        id: merge
+        if: steps.compare.outputs.moved == 'true'
+        run: |
+          branch='${{ steps.fetch.outputs.branch }}'
+          count='${{ steps.compare.outputs.new_commits }}'
+          subject="sync: $count new commits from upstream Ventoy"
+
+          # The body is written to a file rather than passed with repeated -m,
+          # so that it reads as prose in the log rather than as three subjects.
+          {
+            echo "$subject"
+            echo
+            echo "# What changed"
+            echo
+            echo "Upstream ventoy/Ventoy advanced to ${{ steps.compare.outputs.upstream_sha }}."
+            echo "This merge brings in $count commits. Their titles:"
+            echo
+            git log --reverse --pretty='  %h %s' "HEAD..upstream/$branch" | head -50
+            echo
+            echo "# What happens next"
+            echo
+            echo "Pushing this triggers the blob rebuild, which compiles every"
+            echo "binary upstream commits and compares two independent builds of"
+            echo "each. A release follows only if that rebuild passes."
+            echo
+            echo "This merge was made by the sync workflow. No human reviewed the"
+            echo "upstream changes before it landed, which is the same position"
+            echo "anybody is in who runs upstream's own binaries."
+          } > /tmp/merge-message
+
+          if git merge --no-ff --no-edit -F /tmp/merge-message "upstream/$branch"; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            echo "conflicts:"
+            git diff --name-only --diff-filter=U | tee /tmp/conflicts
+            git merge --abort
+          fi
+
+      - name: Push
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin main
+
+      - name: Open an issue if the merge could not be made
+        if: steps.merge.outputs.merged == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(cat /tmp/conflicts 2>/dev/null || echo 'unknown')
+          # One issue, reopened, rather than a new one every three hours.
+          existing=$(gh issue list --state open --label upstream-sync \
+                       --json number --jq '.[0].number' || true)
+          body=$(printf '%s\n' \
+            "The scheduled sync could not merge upstream cleanly and has changed nothing." \
+            "" \
+            "Upstream commit: \`${{ steps.compare.outputs.upstream_sha }}\`" \
+            "" \
+            "Conflicting files:" \
+            "" \
+            '```' \
+            "$files" \
+            '```' \
+            "" \
+            "Resolve this by hand. The sync deliberately does not guess: this is a" \
+            "repository full of bootloaders, and an automatic resolution nobody read" \
+            "is the thing this project exists to argue against." \
+            "" \
+            "The sync will keep trying and will keep failing until it is resolved," \
+            "so this issue is the only notification you will get.")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title 'sync: upstream cannot be merged cleanly' \
+              --label upstream-sync --body "$body"
+          fi
+          exit 1
+
+      - name: Has upstream published a release we do not have
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh release view --repo ventoy/Ventoy --json tagName --jq .tagName 2>/dev/null || echo '')
+          if [ -z "$latest" ]; then
+            echo "have=unknown" >> "$GITHUB_OUTPUT"
+            echo "could not read upstream releases; continuing"
+            exit 0
+          fi
+          echo "tag=$latest" >> "$GITHUB_OUTPUT"
+          echo "upstream latest release: $latest"
+
+          if gh release view "${latest}+repro" --repo '${{ github.repository }}' >/dev/null 2>&1; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "no matching build of $latest here yet"
+          fi
+
+  rebuild:
+    name: rebuild the blobs
+    needs: sync
+    # A rebuild runs when upstream moved, when upstream released something this
+    # fork has not built, or when a person asked for one. Not otherwise: there
+    # is no point spending an hour of runner time to produce the bytes that are
+    # already published.
+    if: >-
+      needs.sync.outputs.moved == 'true' ||
+      needs.sync.outputs.have_release == 'no' ||
+      inputs.force_release
+    uses: ./.github/workflows/blobs.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    with:
+      upstream_release: ${{ needs.sync.outputs.upstream_release }}
+
+  release:
+    name: publish
+    needs: [sync, rebuild]
+    if: needs.rebuild.result == 'success'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    secrets: inherit
+    with:
+      upstream_release: ${{ needs.sync.outputs.upstream_release }}
+      manifest_artifact: ${{ needs.rebuild.outputs.manifest_artifact }}

@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Compile the binaries upstream commits, twice, and write down what happened.
+#
+# # The shape of the argument
+#
+# Upstream's tree contains 806 files whose first bytes say "program". Not one of
+# them was compiled by anybody outside the project. This workflow compiles them
+# in a container whose image is pinned by digest, using toolchains pinned by
+# SHA-256, with the clock and the locale and the paths all fixed, and it does it
+# twice in two different directories. Then it writes a manifest saying, for each
+# file, whether the two builds agreed.
+#
+# # What it does not claim
+#
+# A blob that reproduces here is a blob whose bytes follow from its source under
+# this toolchain. That is not the same as safe, and it is not the same as
+# matching what upstream published. Where the two differ the manifest says so
+# and the release still goes out, because a difference is a fact to publish
+# rather than a reason to hide the build.
+
+name: blobs
+
+on:
+  workflow_call:
+    inputs:
+      upstream_release:
+        description: 'The upstream Ventoy tag this build corresponds to'
+        type: string
+        required: false
+    outputs:
+      manifest_artifact:
+        description: 'Artifact name holding manifest.json'
+        value: ${{ jobs.compare.outputs.artifact }}
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # CentOS 7 is what upstream builds on, and matching it is not nostalgia: the
+  # glibc version determines the symbol versions in every binary produced, so a
+  # newer base silently makes output that will not run on the systems Ventoy
+  # supports. Pinned by digest, because the `centos:7` tag is mutable and a
+  # mutable base makes "reproducible" meaningless.
+  BUILDER_IMAGE: quay.io/centos/centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4
+  LC_ALL: C.UTF-8
+  TZ: UTC
+
+jobs:
+  build:
+    name: build ${{ matrix.pass }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two passes, in two directories, so that anything which embeds its own
+        # build path shows up as a difference rather than as a pass.
+        include:
+          - { pass: one, workdir: /build/alpha }
+          - { pass: two, workdir: /build/beta-with-a-longer-name }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Take the build date from the commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+
+      - name: Fetch the toolchains and check them against the lock
+        run: bash tools/build/fetch-toolchains.sh toolchains/cache
+
+      - name: Compile
+        run: |
+          docker run --rm \
+            -v "$PWD:/ventoy:ro" \
+            -v "$PWD/toolchains/cache:/toolchains:ro" \
+            -v "$PWD/out:/out" \
+            -e SOURCE_DATE_EPOCH \
+            -e LC_ALL -e TZ \
+            -e "VTOY_WORKDIR=${{ matrix.workdir }}" \
+            "$BUILDER_IMAGE" \
+            /bin/bash -c 'cp -a /ventoy "$VTOY_WORKDIR" && cd "$VTOY_WORKDIR" && bash tools/build/build-blobs.sh /out'
+
+      - name: Inventory what came out
+        run: |
+          python3 tools/inventory/inventory.py --root out/tree --hashes \
+            --out "out/inventory-${{ matrix.pass }}.json" || true
+          ls -la out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blobs-${{ matrix.pass }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  compare:
+    name: did the two builds agree
+    needs: build
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact: manifest
+      reproduced: ${{ steps.compare.outputs.reproduced }}
+      differed: ${{ steps.compare.outputs.differed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: blobs-one
+          path: pass-one
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: blobs-two
+          path: pass-two
+
+      - name: Compare, and write the manifest
+        id: compare
+        run: |
+          python3 tools/build/make-manifest.py \
+            --pass-one pass-one/tree \
+            --pass-two pass-two/tree \
+            --reference . \
+            --ventoy-version "${{ inputs.upstream_release || 'unreleased' }}" \
+            --commit "$GITHUB_SHA" \
+            --source-date-epoch "$(git log -1 --pretty=%ct)" \
+            --builder-image "$BUILDER_IMAGE" \
+            --workflow-run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --out manifest.json \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      # The manifest is the thing that gets signed and the thing a reader
+      # checks, so GitHub's own attestation is recorded over it too. That is a
+      # second, independent statement about which workflow produced this file,
+      # made by a party that is neither the maintainer nor the reader.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest
+          path: |
+            manifest.json
+            reproducibility-report.md
+          if-no-files-found: error
+
+      # A blob that stopped reproducing is a regression and the build says so
+      # out loud. It does not fail the run: the manifest records the difference,
+      # the release publishes it, and a reader can see exactly which file is
+      # affected. Failing here would hide the evidence rather than publish it.
+      - name: Say plainly what did not reproduce
+        if: steps.compare.outputs.differed != '0'
+        run: |
+          echo "::warning::${{ steps.compare.outputs.differed }} files did not reproduce across two builds; see the manifest"
