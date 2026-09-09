@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ventoy-verify-sig"
+description = "Detached OpenPGP signature verification for ventoy-verify, in pure Rust so that checking a release does not require GnuPG."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+pgp.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

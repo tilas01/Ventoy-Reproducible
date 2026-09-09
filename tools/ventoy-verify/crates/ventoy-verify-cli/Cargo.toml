@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ventoy-verify-cli"
+description = "The ventoy-verify command line program."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "ventoy-verify"
+path = "src/main.rs"
+
+[dependencies]
+ventoy-verify-core.workspace = true
+ventoy-verify-sig.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

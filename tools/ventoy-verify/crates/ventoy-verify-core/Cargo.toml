@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ventoy-verify-core"
+description = "Hashing, manifest parsing and verdicts for ventoy-verify. No I/O beyond reading the files it is asked to hash, and no user interface."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+sha2.workspace = true
+blake3.workspace = true
+hex.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+walkdir.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

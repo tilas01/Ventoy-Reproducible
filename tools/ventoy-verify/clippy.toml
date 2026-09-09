@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# `clippy::doc_markdown` wants every CamelCase word in a doc comment wrapped in
+# backticks, on the theory that such a word is an identifier. In prose about
+# cryptography and operating systems that is wrong more often than it is right:
+# OpenPGP, GnuPG and FreeBSD are the names of things in the world, not items in
+# this crate, and typesetting them as code makes the documentation read like a
+# stack trace.
+#
+# `".."` keeps clippy's own default list and adds to it, rather than replacing
+# it, so the standard entries such as GitHub and OpenGL still apply.
+doc-valid-idents = [
+    "..",
+    "OpenPGP",
+    "GnuPG",
+    "BLAKE3",
+    "TinyCore",
+    "BusyBox",
+    "FreeBSD",
+    "OpenBSD",
+    "NetBSD",
+    "MidnightBSD",
+    "DragonFly",
+    "ClonOS",
+    "pfSense",
+    "GitHub",
+    "GRUB2",
+    "EDK2",
+    "SecureBoot",
+    "VeilVoice",
+    "Ventoy",
+    "Ventoy2Disk",
+]
+
+# A verification tool is allowed to be explicit. These two fire on code that is
+# clearer written out than folded into a combinator.
+too-many-lines-threshold = 150
