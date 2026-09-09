@@ -1,149 +1,266 @@
-<h1 align="center">
-  <a href=https://www.ventoy.net/>Ventoy</a>
-</h1>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-<p align="center">
-  <img src="https://img.shields.io/github/release/ventoy/Ventoy.svg?style=for-the-badge">
-  <img src="https://img.shields.io/github/license/ventoy/Ventoy?style=for-the-badge">
-  <img src="https://img.shields.io/github/stars/ventoy/Ventoy?style=for-the-badge">
-  <img src="https://img.shields.io/github/downloads/ventoy/Ventoy/total.svg?style=for-the-badge">
-  <img src="https://img.shields.io/github/actions/workflow/status/ventoy/Ventoy/ci.yml?label=actions&logo=github&style=for-the-badge">
-</p>
+<!-- The banner is SVG rather than a committed PNG, for the reason the whole
+     project exists: a picture nobody can read is a binary blob with a nicer
+     file extension. `assets/banner.svg` is text, every mark in it is a line you
+     can read, and editing it produces a diff rather than an opaque new file. -->
+![Ventoy-Reproducible: every binary compiled in public](assets/banner.svg)
 
-<h4 align="left">
-Ventoy is an open source tool to create bootable USB drive for ISO/WIM/IMG/VHD(x)/EFI files. <br/>
-With Ventoy, you don't need to format the disk over and over, just copy the image files to the USB drive and boot them.   
-You can copy many image files at a time and Ventoy will give you a boot menu to select them. <br/> 
-You can also browse ISO/WIM/IMG/VHD(x)/EFI files in local disk and boot them.<br/>
-x86 Legacy BIOS, IA32 UEFI, x86_64 UEFI, ARM64 UEFI and MIPS64EL UEFI are supported in the same way.<br/>
-Both MBR and GPT partition style are supported in the same way.<br/>
-Most type of OS supported(Windows/WinPE/Linux/Unix/ChromeOS/Vmware/Xen...) <br/>
-  1300+ ISO files are tested (<a href="https://www.ventoy.net/en/isolist.html">List</a>). 90%+ distros in <a href="https://distrowatch.com/">distrowatch.com</a> supported (<a href="https://www.ventoy.net/en/distrowatch.html">Details</a>). <br/>
-<br/>Official Website: <a href=https://www.ventoy.net>https://www.ventoy.net</a>
-</h4>
+# Ventoy-Reproducible
 
-# Tested OS
-**Windows**  
-Windows 7, Windows 8, Windows 8.1, Windows 10, Windows 11, Windows Server 2012, Windows Server 2012 R2, Windows Server 2016, Windows Server 2019, Windows Server 2022, Windows Server 2025, WinPE
+**Trust is not verification, and Ventoy asks for trust 806 times.**
 
-**Linux**  
-Debian, Ubuntu, CentOS(6/7/8/9/10), RHEL(6/7/8/9/10), Deepin, Fedora, Rocky Linux, AlmaLinux, EuroLinux(6/7/8/9), openEuler, OpenAnolis, SLES, openSUSE, MX Linux, Manjaro, Linux Mint, Endless OS, Elementary OS, Solus, Linx, Zorin, antiX, PClinuxOS, Arch, ArcoLinux, ArchLabs, BlackArch, Obarun, Artix Linux, Puppy Linux, Tails, Slax, Kali, Mageia, Slackware, Q4OS, Archman, Gentoo, Pentoo, NixOS, Kylin, openKylin, Ubuntu Kylin, KylinSec, Lubuntu, Xubuntu, Kubuntu, Ubuntu MATE, Ubuntu Budgie, Ubuntu Studio, Bluestar, OpenMandriva, ExTiX, Netrunner, ALT Linux, Nitrux, Peppermint, KDE neon, Linux Lite, Parrot OS, Qubes, Pop OS, ROSA, Void Linux, Star Linux, EndeavourOS, MakuluLinux, Voyager, Feren, ArchBang, LXLE, Knoppix, Calculate Linux, Clear Linux, Pure OS, Oracle Linux, Trident, Septor, Porteus, Devuan, GoboLinux, 4MLinux, Simplicity Linux, Zeroshell, Android-x86, netboot.xyz, Slitaz, SuperGrub2Disk, Proxmox VE, Kaspersky Rescue, SystemRescueCD, MemTest86, MemTest86+, MiniTool Partition Wizard, Parted Magic, veket, Sabayon, Scientific, alpine, ClearOS, CloneZilla, Berry Linux, Trisquel, Ataraxia Linux, Minimal Linux Live, BackBox Linux, Emmabuntüs, ESET SysRescue Live,Nova Linux, AV Linux, RoboLinux, NuTyX, IPFire, SELKS, ZStack, Enso Linux, Security Onion, Network Security Toolkit, Absolute Linux, TinyCore, Springdale Linux, Frost Linux, Shark Linux, LinuxFX, Snail Linux, Astra Linux, Namib Linux, Resilient Linux, Virage Linux, Blackweb Security OS, R-DriveImage, O-O.DiskImage, Macrium, ToOpPy LINUX, GNU Guix, YunoHost, foxclone, siduction, Adelie Linux, Elive, Pardus, CDlinux, AcademiX, Austrumi, Zenwalk, Anarchy, DuZeru, BigLinux, OpenMediaVault, Ubuntu DP, Exe GNU/Linux, 3CX Phone System, KANOTIX, Grml, Karoshi, PrimTux, ArchStrike, CAELinux, Cucumber, Fatdog, ForLEx, Hanthana, Kwort, MiniNo, Redcore, Runtu, Asianux, Clu Linux Live, Uruk, OB2D, BlueOnyx, Finnix, HamoniKR, Parabola, LinHES, LinuxConsole, BEE free, Untangle, Pearl, Thinstation, TurnKey, tuxtrans, Neptune, HefftorLinux, GeckoLinux, Mabox Linux, Zentyal, Maui, Reborn OS, SereneLinux , SkyWave Linux, Kaisen Linux, Regata OS, TROM-Jaro, DRBL Linux, Chalet OS, Chapeau, Desa OS, BlankOn, OpenMamba, Frugalware, Kibojoe Linux, Revenge OS, Tsurugi Linux, Drauger OS, Hash Linux, gNewSense, Ikki Boot, SteamOS, Hyperbola, VyOS, EasyNAS, SuperGamer, Live Raizo, Swift Linux, RebeccaBlackOS, Daphile, CRUX, Univention, Ufficio Zero, Rescuezilla, Phoenix OS, Garuda Linux, Mll, NethServer, OSGeoLive, Easy OS, Volumio, FreedomBox, paldo, UBOS, Recalbox, batocera, Lakka, LibreELEC, Pardus Topluluk, Pinguy, KolibriOS, Elastix, Arya, Omoikane, Omarine, Endian Firewall, Hamara, Rocks Cluster, MorpheusArch, Redo, Slackel, SME Server, APODIO, Smoothwall, Dragora, Linspire, Secure-K OS, Peach OSI, Photon, Plamo, SuperX, Bicom, Ploplinux, HP SPP, LliureX, Freespire, DietPi, BOSS, Webconverger, Lunar, TENS, Source Mage, RancherOS, T2, Vine, Pisi, blackPanther, mAid, Acronis, Active.Boot, AOMEI, Boot.Repair, CAINE, DaRT, EasyUEFI, R-Drive, PrimeOS, Avira Rescue System, bitdefender, Checkra1n Linux, Lenovo Diagnostics, Clover, Bliss-OS, Lenovo BIOS Update, Arcabit Rescue Disk, MiyoLinux, TeLOS, Kerio Control, RED OS, OpenWrt, MocaccinoOS, EasyStartup, Pyabr, Refracta, Eset SysRescue, Linpack Xtreme, Archcraft, NHVBOOT, pearOS, SeaTools, Easy Recovery Essentional, iKuai, StorageCraft SCRE, ZFSBootMenu, TROMjaro, BunsenLabs, Todo en Uno, ChallengerOS, Nobara, Holo, CachyOS, Peux OS, Vanilla OS, ShredOS, paladin, Palen1x, dban, ReviOS, HelenOS, XeroLinux, Tiny 11, chimera linux, CuteFish, DragonOs, Rhino Linux, vanilladpup, crystal, IGELOS, MiniOS, gnoppix, PikaOS, UwUntu, Noble, PocketHandyBox, DiskGenius, Commodore, Talos, Shebang Linux, hrmpf, Bazzite, ManualLinux, nyarchlinux, ultramarine, TempleOS, bluefin, Damn Small Linux, Kicksecure, SerentiyOS, AerynOS, ......
+### → [tilas01.github.io/Ventoy-Reproducible](https://tilas01.github.io/Ventoy-Reproducible/)
 
-**Unix**  
-DragonFly, FreeBSD, pfSense, OPNsense, GhostBSD, FreeNAS, TrueNAS, XigmaNAS, FuryBSD, HardenedBSD, MidnightBSD, ClonOS, EmergencyBootKit, helloSystem
+[Ventoy](https://github.com/ventoy/Ventoy) is genuinely good software. It turns
+a USB stick into something you drop ISO files onto and boot, it supports
+hundreds of distributions, and it is free software under the GPL. This project
+is a fork of it, it is not a criticism of it, and nothing here suggests its
+authors have done anything wrong.
 
-**ChromeOS**  
-FydeOS, CloudReady, ChromeOS Flex, ThoriumOS
+It exists because of one property that has nothing to do with intent.
 
-**Other**  
-VMware ESXi, Citrix XenServer, Xen XCP-ng
+## The problem
 
+Ventoy's repository contains **806 files whose first bytes say "this is a
+program"**: bootloaders, EFI drivers, kernel modules, Windows executables. They
+are committed to git as finished binaries. When you install Ventoy, those exact
+files are written to your USB stick and your computer executes them before your
+operating system starts.
 
-# Tested Image Report
-[【How to report a successfully tested image file】](https://github.com/ventoy/Ventoy/issues/1195)
+Not one of them was compiled by anybody outside the project.
 
-# Ventoy Browser
-With Ventoy, you can also browse ISO/WIM/IMG/VHD(x)/EFI files in local disk and boot them. [Notes](https://www.ventoy.net/en/doc_browser.html)
-  
-# VentoyPlugson
-A GUI Ventoy plugin configurator. [VentoyPlugson](https://www.ventoy.net/en/plugin_plugson.html)
+There is no build you can watch, no log you can read, and no way to check that
+`ventoy_x64.efi` in the repository is what its source code compiles to. You can
+read every line of the C, and it tells you nothing about the binary sitting next
+to it. The source being open does not make the binary open.
 
-# Features
-* 100% open source
-* Simple to use
-* Fast (limited only by the speed of copying iso file)
-* Can be installed in USB/Local Disk/SSD/NVMe/SD Card
-* Directly boot from ISO/WIM/IMG/VHD(x)/EFI files, no extraction needed
-* Support to browse and boot ISO/WIM/IMG/VHD(x)/EFI files in local disk
-* No need to be continuous in disk for ISO/WIM/IMG/VHD(x)/EFI files
-* MBR and GPT partition style supported (1.0.15+)
-* x86 Legacy BIOS, IA32 UEFI, x86_64 UEFI, ARM64 UEFI, MIPS64EL UEFI supported
-* IA32/x86_64 UEFI Secure Boot supported (1.0.07+)
-* Linux Persistence supported (1.0.11+)
-* Windows auto installation supported (1.0.09+)
-* Linux auto installation supported (1.0.09+)
-* Variables Expansion supported for Windows/Linux auto installation script
-* FAT32/exFAT/NTFS/UDF/XFS/Btrfs/Ext2(3)(4) supported for main partition
-* ISO files larger than 4GB supported
-* Menu alias, Menu tip message supported
-* Password protect supported
-* Native boot menu style for Legacy & UEFI
-* Most types of OS supported, 1300+ iso files tested
-* Linux vDisk boot supported
-* Not only boot but also complete installation process
-* Menu dynamically switchable between List/TreeView mode
-* "Ventoy Compatible" concept
-* Plugin Framework and GUI plugin configurator
-* Injection files to runtime environment
-* Boot configuration file dynamically replacement
-* Highly customizable theme and menu
-* USB drive write-protected support
-* USB normal use unaffected
-* Data nondestructive during version upgrade
-* No need to update Ventoy when a new distro is released
+That is not an allegation, it is an absence. The Ventoy binaries may be
+perfectly clean, and probably are. But "probably is" is not a security property,
+and today no reader can do better than "probably is" no matter how careful they
+are. Code that runs before your operating system, from a project used to install
+operating systems, is a bad place to have to guess.
 
-![avatar](https://www.ventoy.net/static/img/screen/screen_uefi.png)
+## What this fork does
 
+Every binary is compiled by **GitHub Actions**, in the open, from source you can
+read, in a container pinned by digest, with every compiler pinned by SHA-256.
+Each one is built **twice**, in two differently named directories, and if the
+two builds disagree by a single byte that file is reported as failing.
 
-# Installation Instructions
-See [https://www.ventoy.net/en/doc_start.html](https://www.ventoy.net/en/doc_start.html) for detailed instructions. 
+The result is a **signed manifest** naming every file, its size, its SHA-256 and
+its BLAKE3, and a verdict for each. `ventoy-verify` checks the signature, then
+checks every file. One command.
 
-# Compile Instructions
-Please refer to [BuildVentoyFromSource.txt](DOC/BuildVentoyFromSource.txt)
+```bash
+ventoy-verify release --key signing-key.asc
+```
 
-# Document
-Title | Link
--|-
-**Install & Update** | [https://www.ventoy.net/en/doc_start.html](https://www.ventoy.net/en/doc_start.html)
-**Browse/Boot Files In Local Disk** | [https://www.ventoy.net/en/doc_browser.html](https://www.ventoy.net/en/doc_browser.html)
-**Secure Boot** | [https://www.ventoy.net/en/doc_secure.html](https://www.ventoy.net/en/doc_secure.html)
-**Customize Theme** | [https://www.ventoy.net/en/plugin_theme.html](https://www.ventoy.net/en/plugin_theme.html)  
-**Global Control** | [https://www.ventoy.net/en/plugin_control.html](https://www.ventoy.net/en/plugin_control.html)  
-**Image List** | [https://www.ventoy.net/en/plugin_imagelist.html](https://www.ventoy.net/en/plugin_imagelist.html)  
-**Auto Installation** | [https://www.ventoy.net/en/plugin_autoinstall.html](https://www.ventoy.net/en/plugin_autoinstall.html)  
-**Injection Plugin** | [https://www.ventoy.net/en/plugin_injection.html](https://www.ventoy.net/en/plugin_injection.html)  
-**Persistence Support** | [https://www.ventoy.net/en/plugin_persistence.html](https://www.ventoy.net/en/plugin_persistence.html)  
-**Boot WIM file** | [https://www.ventoy.net/en/plugin_wimboot.html](https://www.ventoy.net/en/plugin_wimboot.html)  
-**Windows VHD Boot** | [https://www.ventoy.net/en/plugin_vhdboot.html](https://www.ventoy.net/en/plugin_vhdboot.html)  
-**Linux vDisk Boot** | [https://www.ventoy.net/en/plugin_vtoyboot.html](https://www.ventoy.net/en/plugin_vtoyboot.html)  
-**DUD Plugin** | [https://www.ventoy.net/en/plugin_dud.html](https://www.ventoy.net/en/plugin_dud.html)  
-**Password Plugin** | [https://www.ventoy.net/en/plugin_password.html](https://www.ventoy.net/en/plugin_password.html)  
-**Conf Replace Plugin** | [https://www.ventoy.net/en/plugin_bootconf_replace.html](https://www.ventoy.net/en/plugin_bootconf_replace.html)  
-**Menu Class** | [https://www.ventoy.net/en/plugin_menuclass.html](https://www.ventoy.net/en/plugin_menuclass.html)  
-**Menu Alias** | [https://www.ventoy.net/en/plugin_menualias.html](https://www.ventoy.net/en/plugin_menualias.html)  
-**Menu Extension** | [https://www.ventoy.net/en/plugin_grubmenu.html](https://www.ventoy.net/en/plugin_grubmenu.html)  
-**Memdisk Mode** | [https://www.ventoy.net/en/doc_memdisk.html](https://www.ventoy.net/en/doc_memdisk.html)  
-**TreeView Mode** | [https://www.ventoy.net/en/doc_treeview.html](https://www.ventoy.net/en/doc_treeview.html)  
-**Disk Layout MBR** | [https://www.ventoy.net/en/doc_disk_layout.html](https://www.ventoy.net/en/doc_disk_layout.html)  
-**Disk Layout GPT** | [https://www.ventoy.net/en/doc_disk_layout_gpt.html](https://www.ventoy.net/en/doc_disk_layout_gpt.html)  
-**Search Configuration** | [https://www.ventoy.net/en/doc_search_path.html](https://www.ventoy.net/en/doc_search_path.html)
+And the part most projects leave out: the manifest and the report **name every
+file that did not reproduce and every file this project could not build at
+all**. A gap nobody is told about is a gap nobody closes.
 
+## Honest status
 
-# FAQ
-See [https://www.ventoy.net/en/faq.html](https://www.ventoy.net/en/faq.html) for detail
+This project does not yet rebuild all 806 files, and it will never claim to.
 
+| | |
+|---|---|
+| Compiled from source here | the self-contained C tools, growing |
+| Wired but not yet enabled | GRUB2 modules, the EDK2 EFI binaries |
+| Cannot be built here, only pinned | 20 third-party binaries: the Rocky Linux shim, the imdisk driver, a TinyCore kernel, 7-Zip, memdisk |
+| Needs a builder this project does not have | the BSD kernel modules, the Windows executables |
+| No build instructions exist anywhere | 30 Linux kernel modules under `LiveCD/VTOY/ventoy/drivers/` |
 
-# Forum
-[https://forums.ventoy.net](https://forums.ventoy.net)
+Every release publishes a `reproducibility-report.md` with the current numbers
+and the name of every file in each row. Read it before relying on any of this.
 
-# Donation
-It would be much appreciated if you want to make a small donation to support my work!  
-Alipay, WeChat Pay, PayPal and Bitcoin are available for donation. You can choose any of them.  
+## What we found on the way
 
-Alipay | WeChat Pay
--|-
-<img src="https://www.ventoy.net/static/img/AliPay.png" width="250" height="250">|<img src="https://www.ventoy.net/static/img/WeChatPay.png" width="250" height="250">
+Deriving the inventory by machine rather than reading upstream's own
+`BLOB_List.md` gives different numbers, and they are worth knowing:
 
-**PayPal**  
-You can transfer to my paypal account `admin@ventoy.net` or just click [https://www.paypal.me/ventoy](https://www.paypal.me/ventoy)  
+```
+executables in the tree          806
+paths named in BLOB_List.md      182
+named and present                176
+present but undocumented         630
+  of those, GRUB2 modules        574
+  of those, everything else       56
+```
 
-**Bitcoin**  
-Bitcoin Address `19mZDWzZgzkHCi9YX9H3fYCUuCHq3W6wfT`
+574 of the undocumented files are GRUB2 modules that the list covers
+collectively with one instruction rather than naming. The other 56 are not
+covered by anything, and 30 of those are committed Linux kernel modules with no
+build instruction recorded anywhere in the repository.
 
+Run it yourself:
 
+```bash
+python3 tools/inventory/inventory.py --print-counts
+```
 
+Checking upstream's compilers also turned up something in its favour, which
+belongs here for the same reason the gaps do. Upstream re-hosts seven build
+dependencies and downloads them with no verification at all. Two of them turn
+out to be byte-identical to their canonical originals: `musl-1.2.1.tar.gz`
+matches musl.libc.org exactly, and `grub-2.04.tar.xz` matches ftp.gnu.org
+exactly. The edk2 archive comes straight from tianocore's own repository. The
+other four, including three prebuilt GCC cross toolchains, have no canonical
+source to compare against. All seven are now pinned in
+[`tools/build/toolchains.lock`](tools/build/toolchains.lock).
 
+## Install `ventoy-verify`
 
+<details>
+<summary><b>Linux, macOS, and the BSDs</b></summary>
 
+```bash
+# From a release
+curl -LO https://github.com/tilas01/Ventoy-Reproducible/releases/latest/download/ventoy-verify-x86_64-unknown-linux-gnu
+chmod +x ventoy-verify-x86_64-unknown-linux-gnu
+sudo mv ventoy-verify-x86_64-unknown-linux-gnu /usr/local/bin/ventoy-verify
 
+# Or build it, which is the point of the exercise
+git clone https://github.com/tilas01/Ventoy-Reproducible
+cd Ventoy-Reproducible/tools/ventoy-verify
+cargo build --release --locked
+./target/release/ventoy-verify --help
+```
 
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+# Download ventoy-verify-x86_64-pc-windows-msvc.exe from the releases page,
+# then from the folder you put it in:
+.\ventoy-verify.exe --help
+```
+
+Or build it with `cargo build --release --locked` in `tools\ventoy-verify`.
+
+</details>
+
+<details>
+<summary><b>A window, if you would rather not use a terminal</b></summary>
+
+```bash
+cargo build --release -p ventoy-verify-gui
+./target/release/ventoy-verify-gui
+```
+
+Choose the release folder, the manifest, and the public key. It shows the same
+answer the command line does, and it never counts a file it did not build as a
+file it verified.
+
+</details>
+
+## Verify a release
+
+```bash
+ventoy-verify release --root . --key signing-key.asc
+```
+
+That checks the signature over `manifest.json` first, and reads nothing from the
+manifest until the signature passes. Then it hashes every file the manifest
+names and reports what it found, failures first.
+
+**There is no keyring, and that is the point.** `gpg --verify` exits zero for a
+signature made by *any* key you have ever imported, so somebody who once
+imported a key from a forum post gets a green tick from a file that person
+signed. `ventoy-verify` takes one key file and verifies against exactly that
+certificate. A signature by anything else is a failure, with both fingerprints
+printed.
+
+Exit codes are `0` for a pass, `1` for a verification failure, and `2` for
+"the check could not be run", because in a script "the release is bad" and "you
+typed the wrong path" deserve different reactions.
+
+Without the tool, and checking rather less:
+
+```bash
+gpg --verify SHA256SUMS.asc SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+## Platforms
+
+Every platform Ventoy itself supports is in scope: **x86_64**, **i386**,
+**aarch64** and **mips64el** for Linux, **Windows** 10 and 11 including ARM64,
+and the BSD kernel modules for **FreeBSD**, **MidnightBSD**, **pfSense**,
+**ClonOS** and **DragonFly**. `ventoy-verify` itself is built for seven targets
+across Linux, Windows and macOS.
+
+Reproducibility is per-target. A Linux x86-64 build reproducing says nothing
+about aarch64, and the manifest never implies otherwise.
+
+## Staying level with upstream
+
+A scheduled workflow checks `ventoy/Ventoy` **every three hours**. When upstream
+commits, this fork merges and rebuilds. When upstream publishes a release, this
+fork builds and publishes a matching one tagged `<upstream tag>+repro.N`, so you
+can always tell which Ventoy you are holding.
+
+If a merge conflicts it stops and opens an issue rather than guessing. This is a
+repository full of bootloaders.
+
+## Documentation
+
+| | |
+|---|---|
+| [`docs/WHITEPAPER.md`](docs/WHITEPAPER.md) | The full argument, the threat model, and what this does not prove |
+| [`docs/REPRODUCIBLE_BUILDS.md`](docs/REPRODUCIBLE_BUILDS.md) | Every source of nondeterminism and the pin for each |
+| [`docs/VERIFYING.md`](docs/VERIFYING.md) | Checking a release, in detail, including what each failure means |
+| [`docs/SIGNING.md`](docs/SIGNING.md) | The signing key, its fingerprint, and how to check it against a second source |
+| [`docs/UPSTREAM_SYNC.md`](docs/UPSTREAM_SYNC.md) | How this fork tracks Ventoy, and what happens when it cannot |
+
+## What this does not prove
+
+Said here rather than in an appendix, because it is the part that makes the rest
+credible.
+
+- A reproducible build proves a binary follows from its source under a given
+  toolchain. It does **not** prove the source is safe. Nobody here has audited
+  Ventoy's C.
+- It does **not** prove the compiler is honest. Guarding against that needs
+  diverse double-compilation, which this project does not do. Four of the seven
+  pinned toolchains are prebuilt binaries with no canonical source.
+- Pinning a compiler by hash fixes *which* unverified compiler you get. That is
+  a smaller claim than it sounds, and it is the one being made.
+- Twenty files are third-party signed binaries this project can only pin. They
+  are counted separately from files it compiled, everywhere, always.
+- Where our build differs from the binary upstream committed, that is reported
+  as a difference to investigate. It is not evidence of wrongdoing, and the
+  usual cause is a toolchain difference.
+
+## Credits
+
+Ventoy is written and maintained by **longpanda** and its contributors. All of
+the functionality lives in their work; this fork adds a build pipeline, a
+verification tool and documentation around it, and takes no credit for Ventoy
+itself.
+
+This fork is maintained by **tilas01**, who holds the copyright in the material
+added here and is the sole author for licensing purposes.
+
+Much of the code and documentation added by this fork was drafted with the help
+of **Claude**, Anthropic's assistant, working to tilas01's direction. Nothing
+reaches a release unread: every change is reviewed, built and tested before it
+is committed. The credit is stated here, in the open, rather than scattered
+through the commit log.
+
+## Licence
+
+**GPL-3.0-or-later.** See [`COPYING`](COPYING).
+
+Ventoy's own source files carry the wording "either version 3 of the License,
+or (at your option) any later version", so distributing this fork under
+GPL-3.0-or-later is permitted by the licence upstream chose. The material this
+fork adds is under the same terms.
+
+The third-party binaries this repository pins but does not build are each under
+their own licence and belong to their own projects. They are listed in
+`manifest.json` with `"origin": "upstream-binary"`, which is also how the
+verifier reports them.

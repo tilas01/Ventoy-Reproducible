@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+
+     The banner, as text.
+
+     A project whose argument is that committed binaries cannot be checked has
+     no business opening its README with a committed PNG. This is SVG: every
+     mark in it is a line you can read, and changing it produces a diff rather
+     than an opaque new blob.
+
+     Tokyo Night, the same palette as the website and the desktop window.
+
+     The motif is the argument in one picture. On the left, twelve outlined
+     squares: binaries you are asked to run without being able to check them.
+     On the right, the same twelve filled in. The gap between is where this
+     project does its work.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1200 300" width="1200" height="300"
+     role="img" aria-label="Ventoy-Reproducible: every binary compiled in public">
+
+  <title>Ventoy-Reproducible</title>
+  <desc>806 executables ship inside Ventoy uncompiled by anyone outside the
+        project. This fork builds them in public CI, twice, and signs the
+        result.</desc>
+
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#f7768e"/>
+      <stop offset="0.5"  stop-color="#e0af68"/>
+      <stop offset="1"    stop-color="#9ece6a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="300" fill="#1a1b26"/>
+
+  <!-- A hairline of the gradient across the top, as the only ornament. -->
+  <rect x="0" y="0" width="1200" height="3" fill="url(#fade)"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+
+    <text x="72" y="112" fill="#c0caf5" font-size="46" font-weight="700"
+          letter-spacing="-0.5">Ventoy<tspan fill="#7aa2f7">-</tspan>Reproducible</text>
+
+    <text x="74" y="152" fill="#737aa2" font-size="19">
+      Trust is not verification, and Ventoy asks for trust 806 times.
+    </text>
+
+    <text x="74" y="196" fill="#9ece6a" font-size="17">
+      Every binary compiled by GitHub Actions, twice, from source you can read.
+    </text>
+
+    <!-- The twelve squares, unchecked then checked. -->
+    <g transform="translate(74, 226)">
+      <g fill="none" stroke="#f7768e" stroke-width="1.5">
+        <rect x="0"   y="0" width="18" height="18" rx="2"/>
+        <rect x="24"  y="0" width="18" height="18" rx="2"/>
+        <rect x="48"  y="0" width="18" height="18" rx="2"/>
+        <rect x="72"  y="0" width="18" height="18" rx="2"/>
+        <rect x="96"  y="0" width="18" height="18" rx="2"/>
+        <rect x="120" y="0" width="18" height="18" rx="2"/>
+      </g>
+
+      <text x="152" y="14" fill="#737aa2" font-size="15">unverifiable</text>
+
+      <path d="M 268 9 L 300 9" stroke="#737aa2" stroke-width="1.5"/>
+      <path d="M 294 4 L 300 9 L 294 14" fill="none" stroke="#737aa2" stroke-width="1.5"/>
+
+      <g fill="#9ece6a">
+        <rect x="316" y="0" width="18" height="18" rx="2"/>
+        <rect x="340" y="0" width="18" height="18" rx="2"/>
+        <rect x="364" y="0" width="18" height="18" rx="2"/>
+        <rect x="388" y="0" width="18" height="18" rx="2"/>
+        <rect x="412" y="0" width="18" height="18" rx="2"/>
+        <rect x="436" y="0" width="18" height="18" rx="2"/>
+      </g>
+
+      <text x="468" y="14" fill="#9ece6a" font-size="15">built in the open, hashed, signed</text>
+    </g>
+
+    <text x="74" y="278" fill="#565f89" font-size="14">
+      GPL-3.0-or-later  ·  a fork of ventoy/Ventoy  ·  not a criticism of it
+    </text>
+  </g>
+</svg>
