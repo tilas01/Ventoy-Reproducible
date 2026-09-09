@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The compilers and sources Ventoy is built with, pinned by SHA-256.
+#
+# Format is `sha256  url`, one per line, the same shape `sha256sum` writes, so
+# it can be checked by eye and regenerated with ordinary tools.
+#
+# ============================================================================
+# Why this file exists
+# ============================================================================
+#
+# Upstream's CI script, `INSTALL/docker_ci_build.sh`, begins by downloading
+# seven archives with `wget -q` and no verification of any kind. Five of them
+# are compilers. Anyone who could change what those URLs serve could change
+# every binary Ventoy produces, and no build log would show it.
+#
+# Pinning does not make those compilers trustworthy. It makes them *fixed*: the
+# build now fails loudly if the bytes at a URL are not the bytes this project
+# was pinned to. That is a smaller claim than it sounds and it is worth making.
+#
+# ============================================================================
+# What was checked against a canonical source, on 2026-09-10
+# ============================================================================
+#
+# Two of these are re-hosted copies of well known releases, and both turn out to
+# be byte-identical to the originals. This is stated because it is evidence in
+# upstream's favour and it would be dishonest to publish only the gaps:
+#
+#   musl-1.2.1.tar.gz   matches https://musl.libc.org/releases/musl-1.2.1.tar.gz
+#   grub-2.04.tar.xz    matches https://ftp.gnu.org/gnu/grub/grub-2.04.tar.xz
+#
+# The edk2 archive is fetched straight from tianocore's own repository on
+# GitHub, so its URL is already canonical and there is nothing to compare it
+# against.
+#
+# The remaining four have no canonical source to compare with:
+#
+#   dietlibc-0.34.tar.xz    upstream's copy; fefe.de did not serve the file when
+#                           this was checked, so no comparison was possible
+#   gcc-linaro-7.4.1-...    a prebuilt cross toolchain, re-hosted
+#   aarch64--uclibc--...    a prebuilt Buildroot toolchain, re-hosted
+#   mips-loongson-gcc7.3    a prebuilt Loongson toolchain, re-hosted
+#
+# Those four are binary compilers whose provenance ends at a GitHub release
+# owned by the Ventoy author. That is the largest remaining hole in this
+# project's chain and `docs/WHITEPAPER.md` says so in the same words.
+#
+# ============================================================================
+# Changing a line in this file
+# ============================================================================
+#
+# A mismatch is not routine and must never be fixed by pasting in whatever hash
+# the server now returns. If upstream re-uploads an asset, the change is made in
+# its own commit, with the old and new hashes both in the message, and a
+# sentence about why the file changed.
+
+# Verified against the official musl release.
+68af6e18539f646f9c41a3a2bb25be4a5cfa5a8f65f0bb647fd2bbfdf877e84b  https://github.com/ventoy/vtoytoolchain/releases/download/1.0/musl-1.2.1.tar.gz
+
+# Verified against the official GNU release.
+e5292496995ad42dabe843a0192cf2a2c502e7ffcc7479398232b10a472df77d  https://github.com/ventoy/vtoytoolchain/releases/download/1.0/grub-2.04.tar.xz
+
+# Canonical by URL: tianocore's own repository.
+c6f691aa91afbaab811a369fe729f61d8e5b58bb5ad79a45446c9ee849c1a60b  https://codeload.github.com/tianocore/edk2/zip/edk2-stable201911
+
+# No canonical source available for comparison.
+7994ad5a63d00446da2e95da1f3f03355b272f096d7eb9830417ab14393b3ace  https://github.com/ventoy/vtoytoolchain/releases/download/1.0/dietlibc-0.34.tar.xz
+
+# Prebuilt binary cross toolchains, re-hosted, no canonical source.
+27f1dc2c491ed61ae8f0d4b0c11de59cd2f7dd9c94761ee7153006fcac1bf9ab  https://github.com/ventoy/vtoytoolchain/releases/download/1.0/gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu.tar.xz
+04176f56ac977215c5257c307cece2d32e03770b96380e09c50379d4d84a5b39  https://github.com/ventoy/vtoytoolchain/releases/download/1.0/aarch64--uclibc--stable-2020.08-1.tar.bz2
+e92802811409b86f5a52f589b85038681bb1ac7463284b7b419d502153eca849  https://github.com/ventoy/vtoytoolchain/releases/download/1.0/mips-loongson-gcc7.3-2019.06-29-linux-gnu.tar.gz
