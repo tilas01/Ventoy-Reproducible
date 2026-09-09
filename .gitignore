@@ -1,0 +1,80 @@
+# Build output. Nothing that a compiler writes belongs in a repository whose
+# whole argument is that binaries should come from a build you can watch.
+/target
+target/
+**/*.rs.bk
+/out/
+/build/
+/artifacts/
+
+# The rebuilt blobs and the reports about them. CI produces these on every run
+# and attaches them to a release; a copy committed by hand would be exactly the
+# kind of unverifiable file this project exists to remove.
+/rebuild/
+/reports/
+*.stamp
+
+# Toolchain tarballs fetched during a build. They are pinned by hash in
+# `toolchains.lock` and downloaded on demand, never vendored.
+/toolchains/cache/
+*.tar.xz
+*.tar.gz
+*.tar.bz2
+!DOC/*.tar.xz
+
+# Locally generated release-signing material. NEVER commit any of this.
+# `tools/signing/generate-signing-key.sh` writes here; the private key and the
+# passphrase that protects it live only on the maintainer's machine and in
+# GitHub's encrypted secret store. Only the public key and its fingerprint are
+# ever meant to leave this folder.
+/gpg_secrets/
+gpg_secrets/
+secring.*
+*.key
+*.gpg
+!*.pub
+
+# Armoured OpenPGP files are ignored by default so that a private key cannot be
+# committed by accident. The public key is meant to be published, so the two
+# places it legitimately lives are allowed back in explicitly.
+*.asc
+!docs/keys/ventoy-reproducible-signing-key.asc
+!**/public-key.asc
+
+# Working notes and assistant configuration. These are tooling for whoever is
+# working on this, not part of what anybody downloads, and a public repository
+# is not the place for either.
+#
+# NOTE, because untracking is not deleting: `git rm --cached` stops a file
+# being published from now on, but every version already committed stays in the
+# repository's history and can still be fetched by anyone who clones it.
+# Removing it from history means rewriting published history and force-pushing,
+# which is a separate and deliberate act.
+/ai/
+ai/
+.claude/
+.claude*/
+CLAUDE.md
+**/CLAUDE.md
+.mcp.json
+.cursor/
+.aider*
+.codeium/
+.github/copilot-instructions.md
+HANDOFF.md
+HANDOVER.md
+NEXT-SESSION.md
+
+# Agent skills. Installed locally for Rust and security review practice; they
+# are tooling, not a deliverable, and several carry their own upstream licences.
+skills/
+**/skills/
+
+# OS and editor noise.
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

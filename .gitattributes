@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Line endings are pinned, and this is not a style preference.
+#
+# Every claim this project makes is a byte-for-byte comparison. `ventoy-verify`
+# hashes files and reports whether two builds agree; the reproducibility gate in
+# CI fails when a single byte differs. A contributor whose git rewrites line
+# endings on checkout would see manifests and reports fail against files they
+# had not touched, with a diff that nothing can show them.
+#
+# So: text is text, and text is LF, everywhere, for everyone.
+* text=auto eol=lf
+
+# Except where bytes are bytes. `text=auto` guesses well, and a wrong guess here
+# corrupts a file silently. Upstream Ventoy commits several hundred binaries and
+# this fork must not alter one of them by accident: a mangled blob would be
+# recorded as a reproducibility failure that never existed.
+*.efi   binary
+*.exe   binary
+*.ko    binary
+*.sys   binary
+*.cpl   binary
+*.dll   binary
+*.krn   binary
+*.img   binary
+*.vhd   binary
+*.xz    binary
+*.gz    binary
+*.bz2   binary
+*.zip   binary
+*.7z    binary
+*.cpio  binary
+*.png   binary
+*.gif   binary
+*.ico   binary
+*.jpg   binary
+*.jpeg  binary
+*.pdf   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+
+# Detached signatures and key material are ASCII-armoured, and a byte of
+# difference makes them fail to verify. Left as text, LF, like everything else,
+# but named here so nobody is tempted to mark them binary and break the diff.
+*.asc   text eol=lf
+*.sig   binary
+
+# Shell scripts run on Linux runners. A CRLF shebang is a "bad interpreter"
+# error that costs an hour to recognise the first time you meet it.
+*.sh    text eol=lf
+
+# Files this fork owns that upstream also has.
+#
+# `merge=ours` keeps our version through every upstream merge, so the scheduled
+# sync does not conflict on the README three times a day. The driver has to be
+# enabled for the attribute to do anything:
+#
+#     git config merge.ours.driver true
+#
+# The sync workflow sets that. Without it git silently ignores the attribute and
+# the first upstream edit to README.md conflicts, which is a confusing thing to
+# debug from a cron log.
+README.md       merge=ours
+.gitattributes  merge=ours
+.gitignore      merge=ours
