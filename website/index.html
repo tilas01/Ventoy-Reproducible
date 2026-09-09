@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later
+
+     One page, on purpose.
+
+     Its job is to explain a problem and show four commands. There is no
+     framework, no build step, no web font and no request to any third party, so
+     opening this file from a local clone shows exactly what the published site
+     shows. That matters for a project whose argument is that you should be able
+     to check things yourself: a site you cannot read offline is one more thing
+     you are taking on trust.
+
+     The signing key fingerprint is written into this HTML rather than fetched,
+     for the same reason. A local copy shows what the source says.
+-->
+<html lang="en" >
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ventoy-Reproducible</title>
+<meta name="description" content="A fork of Ventoy whose binaries are compiled in public by GitHub Actions, built twice, hashed and signed, with an honest list of what does not reproduce.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%231a1b26'/><rect x='3' y='3' width='4' height='4' rx='1' fill='%23f7768e'/><rect x='9' y='9' width='4' height='4' rx='1' fill='%239ece6a'/></svg>">
+<link rel="stylesheet" href="css/themes.css">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<div class="rule"></div>
+
+<main>
+
+  <h1>Ventoy<span class="sep">-</span>Reproducible</h1>
+  <p class="tagline">Trust is not verification, and Ventoy asks for trust 806 times.</p>
+
+  <p>
+    <a href="https://github.com/ventoy/Ventoy">Ventoy</a> is genuinely good
+    software, and this is a fork of it rather than a criticism of it. Nothing
+    here suggests its authors have done anything wrong.
+  </p>
+
+  <h2>The problem</h2>
+
+  <p>
+    Ventoy's repository contains <strong>806 files whose first bytes say &ldquo;this
+    is a program&rdquo;</strong>: bootloaders, EFI drivers, kernel modules, Windows
+    executables. They are committed to git as finished binaries. When you install
+    Ventoy, those exact files are written to your USB stick, and your computer runs
+    them before your operating system starts.
+  </p>
+
+  <p><strong>Not one of them was compiled by anybody outside the project.</strong></p>
+
+  <p>
+    There is no build you can watch and no way to check that
+    <code>ventoy_x64.efi</code> is what its source compiles to. You can read every
+    line of the C, and it tells you nothing about the binary next to it. The source
+    being open does not make the binary open.
+  </p>
+
+  <p>
+    That is an absence, not an allegation. Those binaries are probably clean. But
+    <em>probably</em> is not a security property, and today no reader can do
+    better than <em>probably</em> however careful they are.
+  </p>
+
+  <h2>What this fork does</h2>
+
+  <p>
+    Every binary is compiled by <strong>GitHub Actions</strong>, from source you can
+    read, in a container pinned by digest, with every compiler pinned by SHA-256.
+    Each is built <strong>twice</strong>, in two differently named directories, and
+    a one-byte disagreement is reported as a failure.
+  </p>
+
+  <p>
+    The result is a <strong>signed manifest</strong> naming every file with its size,
+    SHA-256 and BLAKE3. And the part most projects leave out: the manifest and its
+    report <strong>name every file that did not reproduce and every file this
+    project could not build at all</strong>.
+  </p>
+
+  <h2>Use it</h2>
+
+  <h3>Check a release</h3>
+<pre><code><span class="c-comment"># Download a release, then one command:</span>
+ventoy-verify release --key signing-key.asc</code></pre>
+
+  <p>
+    It checks the signature over the manifest first, and reads nothing from the
+    manifest until that passes. Then it hashes every file and prints failures
+    first.
+  </p>
+
+<pre><code><span class="c-ok">OK</span> signature over manifest.json is good
+   made by a signing subkey of 4E5F DAEA DF0E 4EB5 749F 7AB1 4FFA 1EB9 69BE 7BBD
+
+806 files checked
+  806 matched the manifest
+    786 compiled by this project's CI
+    20 third-party binaries, pinned by hash and <span class="c-warn">not built here</span>
+
+<span class="c-ok">PASSED.</span> every file matches the manifest.</code></pre>
+
+  <p class="small muted">
+    Exit <code>0</code> passed, <code>1</code> a verification failure,
+    <code>2</code> the check could not run. In a script, &ldquo;the release is
+    bad&rdquo; and &ldquo;you typed the wrong path&rdquo; deserve different
+    reactions.
+  </p>
+
+  <h3>Build the verifier</h3>
+<pre><code>git clone https://github.com/tilas01/Ventoy-Reproducible
+cd Ventoy-Reproducible/tools/ventoy-verify
+cargo build --release --locked
+
+<span class="c-comment"># a window instead, if you would rather not use a terminal</span>
+cargo build --release -p ventoy-verify-gui</code></pre>
+
+  <h3>Count the binaries yourself</h3>
+<pre><code>python3 tools/inventory/inventory.py --print-counts</code></pre>
+
+  <div class="counts">
+    <b>806</b><span>executables in the tree</span>
+    <b>182</b><span>paths named in upstream's <code>BLOB_List.md</code></span>
+    <b>176</b><span>named and actually present</span>
+    <b class="big">630</b><span>present but not named anywhere</span>
+    <b>574</b><span>&hellip;of those, GRUB2 modules</span>
+    <b>30</b><span>&hellip;kernel modules with no build instructions at all</span>
+  </div>
+
+  <p class="small muted">
+    The 574 GRUB2 modules are covered collectively by one build instruction rather
+    than named, which is reasonable. The 30 kernel modules under
+    <code>LiveCD/VTOY/ventoy/drivers/</code> are covered by nothing. This is the
+    ordinary drift of a hand-maintained list, which is why this project derives
+    its inventory by machine on every run.
+  </p>
+
+  <h3>Rebuild it all yourself</h3>
+<pre><code>export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+bash tools/build/fetch-toolchains.sh toolchains/cache
+<span class="c-comment"># then the container command in docs/REPRODUCIBLE_BUILDS.md</span></code></pre>
+
+  <h2>It never falls behind Ventoy</h2>
+
+  <p>
+    A fork that goes stale is worse than no fork: it offers the reassurance of a
+    verified build while shipping a version with bugs upstream fixed months ago,
+    and the reassurance is the part people remember.
+  </p>
+
+  <p>
+    A scheduled workflow checks <code>ventoy/Ventoy</code> <strong>every three
+    hours</strong>. New commits are merged and rebuilt. A new upstream release is
+    built and published here as <code>&lt;upstream tag&gt;+repro.N</code>, so you
+    can always tell which Ventoy you are holding. If a merge conflicts it stops and
+    opens an issue rather than guessing, because this is a repository full of
+    bootloaders.
+  </p>
+
+  <p class="small muted">
+    <code>main</code> is the only branch published. Development happens elsewhere
+    and reaches it as a merge, so the public history is the history of what was
+    released.
+  </p>
+
+  <h2>The signing key</h2>
+
+  <code class="fpr">4E5F DAEA DF0E 4EB5 749F  7AB1 4FFA 1EB9 69BE 7BBD</code>
+
+  <p class="small muted">
+    RSA 4096, certify-only primary with a separate signing subkey. This
+    fingerprint is written into this page's HTML rather than fetched, so a local
+    copy of the site shows what the source says. Compare it against
+    <a href="https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/SIGNING.md">docs/SIGNING.md</a>
+    and the release notes before trusting a release: a key published beside the
+    thing it signs proves nothing on its own.
+  </p>
+
+  <div class="note">
+    <p class="small" style="margin:0">
+      <strong>ventoy-verify has no keyring, and that is the point.</strong>
+      <code>gpg --verify</code> exits zero for a signature made by <em>any</em> key
+      you have ever imported, so somebody who once imported a key from a forum post
+      gets a green tick. This tool takes one key file and treats a signature from
+      anything else as a failure, naming both fingerprints.
+    </p>
+  </div>
+
+  <h2>What this does not prove</h2>
+
+  <div class="note bad">
+    <p class="small" style="margin:0 0 8px">
+      This is the part that makes the rest credible, so it is on the page rather
+      than in an appendix.
+    </p>
+    <ul class="small" style="margin:0">
+      <li>A reproducible build proves a binary follows from its source. It does
+          <strong>not</strong> prove the source is safe. Nobody here has audited
+          Ventoy's C.</li>
+      <li>It does <strong>not</strong> prove the compiler is honest. Four of the
+          seven pinned toolchains are prebuilt binaries with no canonical source.
+          A backdoored compiler produces a perfectly reproducible backdoor.</li>
+      <li>Pinning a compiler by hash fixes <em>which</em> unverified compiler you
+          get. That is a smaller claim than it sounds.</li>
+      <li>Reproducibility is per-target. An x86-64 build reproducing says nothing
+          about aarch64.</li>
+      <li>Twenty files are third-party binaries that can only be pinned, never
+          built here. They are counted separately, everywhere.</li>
+      <li>Most of the 806 are not yet built by this project. Every unbuilt path is
+          named with a reason in every manifest.</li>
+      <li>The builds run on GitHub's infrastructure. The detached signature narrows
+          what a compromise there could achieve; it does not eliminate it.</li>
+    </ul>
+  </div>
+
+  <h2>Documentation</h2>
+
+  <div class="wrap">
+  <table>
+    <tr>
+      <td><a href="https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/WHITEPAPER.md">WHITEPAPER.md</a></td>
+      <td>The full argument, the threat model, and what this does not prove</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/REPRODUCIBLE_BUILDS.md">REPRODUCIBLE_BUILDS.md</a></td>
+      <td>Every source of nondeterminism and the pin for each</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/VERIFYING.md">VERIFYING.md</a></td>
+      <td>Checking a release, and what each kind of failure means</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/SIGNING.md">SIGNING.md</a></td>
+      <td>The key, its fingerprint, and how to check it against a second source</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/UPSTREAM_SYNC.md">UPSTREAM_SYNC.md</a></td>
+      <td>How this fork tracks Ventoy, and what happens when it cannot</td>
+    </tr>
+  </table>
+  </div>
+
+  <h2>Credits and licence</h2>
+
+  <p class="small">
+    Ventoy is written and maintained by <strong>longpanda</strong> and its
+    contributors. All of the functionality lives in their work; this fork adds a
+    build pipeline, a verification tool and documentation, and takes no credit for
+    Ventoy itself.
+  </p>
+
+  <p class="small">
+    This fork is maintained by <strong>tilas01</strong>. Much of the code and
+    documentation added here was drafted with the help of <strong>Claude</strong>,
+    Anthropic's assistant, working to tilas01's direction. Nothing reaches a
+    release unread: every change is reviewed, built and tested before it is
+    committed. The credit is stated here, in the open, rather than scattered
+    through the commit log.
+  </p>
+
+  <p class="small">
+    <strong>GPL-3.0-or-later.</strong> Ventoy's own source headers say
+    &ldquo;either version 3 of the License, or (at your option) any later
+    version&rdquo;, so this is permitted by the licence upstream chose. The
+    third-party binaries this repository pins but does not build remain under their
+    own licences.
+  </p>
+
+</main>
+
+<footer>
+  <div class="foot-inner">
+    <a href="https://github.com/tilas01/Ventoy-Reproducible">Repository</a> &middot;
+    <a href="https://github.com/ventoy/Ventoy">Ventoy upstream</a> &middot;
+    <a href="user-agreements/LICENCE.txt">Licence</a> &middot;
+    <a href="https://github.com/tilas01/Ventoy-Reproducible/issues">Issues</a>
+    <br>
+    <span class="small">No trackers, no cookies, no third-party requests. This page
+    is one HTML file, two stylesheets and one script, and it reads the same from a
+    local clone.</span>
+  </div>
+</footer>
+
+<script src="js/legal.js"></script>
+</body>
+</html>

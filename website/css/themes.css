@@ -1,0 +1,52 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Colour, as tokens.
+ *
+ * Tokyo Night is the default and is declared on bare `:root` so the page has
+ * correct colours before any JavaScript runs, including for readers who block
+ * it entirely. Nothing else in the stylesheet names a colour directly, so a
+ * second scheme is a block here and no other change.
+ *
+ * `color-scheme` is declared beside the colours it has to agree with. That is
+ * the one thing custom properties cannot reach: the browser's native controls,
+ * scrollbars and form widgets are drawn by the platform, and without this they
+ * are drawn light on a near-black page.
+ *
+ * A light option exists because a dark-only site is unreadable in bright sun
+ * and some people simply prefer one.
+ */
+
+:root,
+:root[data-theme="tokyo-night"] {
+  color-scheme: dark;
+  --bg:       #1a1b26;
+  --bg-soft:  #1f2335;
+  --bg-inset: #16161e;
+  --border:   #2f3549;
+  --fg:       #c0caf5;
+  --muted:    #737aa2;
+  --dim:      #565f89;
+  --accent:   #7aa2f7;
+  --accent-2: #bb9af7;
+  --cyan:     #7dcfff;
+  --ok:       #9ece6a;
+  --warn:     #e0af68;
+  --err:      #f7768e;
+}
+
+:root[data-theme="paper"] {
+  color-scheme: light;
+  --bg:       #faf4ed;
+  --bg-soft:  #f2e9e1;
+  --bg-inset: #fffaf3;
+  --border:   #dfd8d0;
+  --fg:       #575279;
+  --muted:    #797593;
+  --dim:      #9893a5;
+  --accent:   #286983;
+  --accent-2: #907aa9;
+  --cyan:     #56949f;
+  --ok:       #618774;
+  --warn:     #ea9d34;
+  --err:      #b4637a;
+}

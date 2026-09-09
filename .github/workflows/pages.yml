@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Publish the website.
+#
+# There is no build step, and that is deliberate rather than lazy. The site is
+# one HTML file, two stylesheets and one script, with no framework, no bundler
+# and no request to any third party. So the published site is byte-identical to
+# what is in `website/`, which means a reader who has cloned the repository can
+# open `website/index.html` and see exactly what the web shows.
+#
+# That matters more here than it would elsewhere. The signing key fingerprint is
+# written into the HTML rather than fetched at runtime, so a local copy of the
+# site is a second place to check it that does not involve trusting a server.
+#
+# A check runs before the deploy: the fingerprint in the page has to match the
+# one in `docs/SIGNING.md`. Two copies of a fingerprint that can drift apart are
+# worse than one copy, because a reader comparing them would find a mismatch and
+# have no way to tell which is right.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/SIGNING.md'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: the site agrees with the docs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The fingerprint on the site matches the one in the docs
+        run: |
+          # Strip spaces before comparing: the site groups the fingerprint in
+          # fours for readability and the docs do too, but a stray double space
+          # between the halves is conventional and must not fail this check.
+          site=$(grep -o '[0-9A-F ]\{50,\}' website/index.html \
+                 | tr -d ' ' | grep -E '^[0-9A-F]{40}$' | head -1)
+          docs=$(grep -o '[0-9A-F ]\{50,\}' docs/SIGNING.md \
+                 | tr -d ' ' | grep -E '^[0-9A-F]{40}$' | head -1)
+
+          echo "site: $site"
+          echo "docs: $docs"
+
+          if [ -z "$site" ] || [ -z "$docs" ]; then
+            echo "::error::could not find a 40 character fingerprint in one of them"
+            exit 1
+          fi
+          if [ "$site" != "$docs" ]; then
+            echo "::error::the website and docs/SIGNING.md disagree about the signing key"
+            exit 1
+          fi
+
+          # And it must be the key actually published in the repository, not a
+          # third value that agrees with itself.
+          key=$(gpg --show-keys --with-colons docs/keys/ventoy-reproducible-signing-key.asc \
+                | awk -F: '/^fpr:/ {print $10; exit}')
+          echo "key:  $key"
+          if [ "$site" != "$key" ]; then
+            echo "::error::the published fingerprint is not the fingerprint of the published key"
+            exit 1
+          fi
+          echo "all three agree"
+
+      - name: No third-party requests crept into the page
+        run: |
+          # The site's claim is that it makes no outside requests. A stylesheet
+          # or font pulled from a CDN would quietly break that, and would be
+          # very easy to add without noticing.
+          if grep -nE '(src|href)="https?://' website/*.html \
+             | grep -vE 'github\.com|ventoy' ; then
+            echo "::error::the page references an external resource"
+            exit 1
+          fi
+          echo "no external resources beyond ordinary hyperlinks"
+
+  deploy:
+    name: publish
+    needs: check
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
