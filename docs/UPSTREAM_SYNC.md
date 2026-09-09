@@ -113,3 +113,27 @@ it after changing the build pipeline, when the same upstream version needs a new
 `main` is the only branch published here. Development happens in a separate
 private repository and reaches this one only as a merge into `main`, so the
 public history is the history of what was actually released.
+
+Upstream calls its branch `master`, and this fork inherited that name when it
+was created. It was renamed to `main` deliberately, and the rename has a useful
+side effect described below.
+
+## The two upstream workflows that are still here
+
+`.github/workflows/ci.yml` and `.github/workflows/sync2gitee.yml` come from
+upstream and are left exactly as they are. Neither can run on this fork:
+
+- Both trigger only on pushes to `master`, and this fork's branch is `main`.
+- `sync2gitee.yml` is additionally guarded by
+  `github.repository_owner == 'ventoy'`, and mirrors to a Gitee account that
+  belongs to Ventoy's maintainer using secrets that do not exist here.
+
+They are kept rather than deleted because deleting a file upstream still edits
+turns every future sync into a delete-versus-modify conflict, which a merge
+driver cannot resolve. Since "never falls behind upstream" is the point of this
+fork, two inert files are a better trade than a recurring manual merge.
+
+If you are looking at the Actions tab and wondering which CI is authoritative:
+it is `rust.yml`, `blobs.yml`, `sync-upstream.yml`, `release.yml` and
+`pages.yml`. "Ventoy CI" and "Mirror GitHub to Gitee" are upstream's and are
+dormant.
