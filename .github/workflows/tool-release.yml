@@ -1,0 +1,276 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Publish `ventoy-verify` itself, signed, for the seven platforms it runs on.
+#
+# # Why the tool gets its own release, separate from the blobs
+#
+# Two things here have very different release cadences and very different risk.
+#
+# The blob rebuild is slow, needs a pinned CentOS container and 460 MB of
+# toolchains, and follows upstream Ventoy's own schedule. The verifier is a
+# small Rust program that changes when its own code changes. Tying them together
+# would mean nobody could get a fixed verifier until the next Ventoy release,
+# and it would mean every verifier bugfix triggered an hour of container builds.
+#
+# There is also an ordering problem worth naming. A reader needs the verifier
+# *before* they can check a blob release, so the verifier cannot be an artefact
+# inside the thing it verifies. It ships on its own, and `SHA256SUMS.asc` is
+# what you check it with, by hand, once.
+#
+# # Tagging
+#
+# `verify-vX.Y.Z`, which is deliberately not the `<upstream>+repro.N` shape the
+# blob releases use. Somebody scanning the releases page has to be able to tell
+# at a glance whether they are looking at a rebuilt Ventoy or at the tool, and
+# two version schemes that look alike is how that goes wrong.
+
+name: tool-release
+
+on:
+  push:
+    tags: ['verify-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and publish, for example verify-v0.1.0'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # One package per target, and `apt` names only what that target needs.
+        # `gcc-multilib` and `gcc-aarch64-linux-gnu` declare a hard conflict on
+        # Ubuntu 24.04, so installing both for every cross job fails apt before
+        # a compiler runs.
+        include:
+          - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04, target: aarch64-unknown-linux-gnu,
+              apt: gcc-aarch64-linux-gnu }
+          - { os: ubuntu-24.04, target: i686-unknown-linux-gnu,
+              apt: gcc-multilib }
+          - { os: windows-2022, target: x86_64-pc-windows-msvc }
+          - { os: windows-2022, target: aarch64-pc-windows-msvc }
+          - { os: macos-14,     target: aarch64-apple-darwin }
+          - { os: macos-13,     target: x86_64-apple-darwin }
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/ventoy-verify
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install the toolchain and target
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add ${{ matrix.target }}
+
+      - name: Cross linker for this target only
+        if: matrix.apt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt }}
+
+      # The build date comes from the tagged commit, not from the clock, so that
+      # rebuilding this tag in a year produces the same bytes.
+      - name: Take the build date from the commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+        working-directory: .
+
+      - name: Build
+        run: cargo build --release --locked -p ventoy-verify-cli --target ${{ matrix.target }}
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          RUSTFLAGS: >-
+            --remap-path-prefix=${{ github.workspace }}=/src
+            --remap-path-prefix=/home/runner/.cargo=/cargo
+
+      # Named by target rather than left as `ventoy-verify`, because seven files
+      # with one name cannot share a release page.
+      - name: Name the artefact
+        id: stage
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/staged"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/ventoy-verify.exe" \
+               "$GITHUB_WORKSPACE/staged/ventoy-verify-${{ matrix.target }}.exe"
+          else
+            cp "target/${{ matrix.target }}/release/ventoy-verify" \
+               "$GITHUB_WORKSPACE/staged/ventoy-verify-${{ matrix.target }}"
+          fi
+          ls -la "$GITHUB_WORKSPACE/staged"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tool-${{ matrix.target }}
+          path: staged/
+          if-no-files-found: error
+
+  publish:
+    name: sign and publish
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      # `secrets` is not available in a step-level `if`, so presence is surfaced
+      # here as a plain string and tested as one below.
+      HAS_SIGNING_KEY: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tool-*
+          merge-multiple: true
+          path: release
+
+      - name: What are we publishing
+        run: |
+          ls -la release/
+          count=$(find release -type f | wc -l)
+          echo "$count binaries staged"
+          # Seven targets in the matrix. Fewer means a job failed and the
+          # release would quietly ship a subset, which is worse than no release.
+          if [ "$count" -ne 7 ]; then
+            echo "::error::expected 7 binaries, found $count; refusing to publish a partial release"
+            exit 1
+          fi
+
+      - name: Write SHA256SUMS
+        run: |
+          cd release
+          # Sorted, so two runs of the same tag produce the same file, and so a
+          # reader diffing two releases sees only real changes.
+          sha256sum $(find . -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort) > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Import the signing key
+        id: gpg
+        if: env.HAS_SIGNING_KEY == 'true'
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          chmod 700 "$GNUPGHOME"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          printf '%s' '${{ secrets.GPG_PRIVATE_KEY }}' | gpg --batch --import
+          fpr=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          echo "fingerprint=$fpr" >> "$GITHUB_OUTPUT"
+          # Without ownertrust, gpg waits for an interactive prompt that has
+          # nowhere to appear on a runner.
+          printf '%s:6:\n' "$fpr" | gpg --batch --import-ownertrust
+          echo "imported $fpr"
+
+      - name: Sign the sums
+        if: steps.gpg.outputs.fingerprint != ''
+        run: |
+          cd release
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+              --armor --detach-sign --digest-algo SHA512 \
+              --output SHA256SUMS.asc SHA256SUMS <<< '${{ secrets.GPG_PASSPHRASE }}'
+          gpg --armor --export '${{ steps.gpg.outputs.fingerprint }}' > signing-key.asc
+          echo "signed"
+
+      # Check the signature with the binary we just built, before publishing.
+      # A release whose signature does not verify must never reach the release
+      # page, and the cheapest place to catch that is here.
+      - name: The tool verifies its own release
+        if: steps.gpg.outputs.fingerprint != ''
+        run: |
+          chmod +x release/ventoy-verify-x86_64-unknown-linux-gnu
+          ./release/ventoy-verify-x86_64-unknown-linux-gnu signature \
+            release/SHA256SUMS --key release/signing-key.asc
+          echo "the freshly built verifier accepted the freshly made signature"
+
+      - name: Say so if this build is unsigned
+        if: steps.gpg.outputs.fingerprint == ''
+        run: |
+          echo "::warning::no signing key available, so this release is unsigned"
+          printf '%s\n' \
+            '> **This build is not signed.**' \
+            '>' \
+            '> The signing key is a repository secret and is absent here, which' \
+            '> is the expected state on a fork.' > release/UNSIGNED.md
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'release/ventoy-verify-*'
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fpr='${{ steps.gpg.outputs.fingerprint }}'
+          cat > /tmp/notes.md <<'NOTES'
+          `ventoy-verify` checks a Ventoy-Reproducible release against its signed
+          manifest. It is the tool you need **before** you can check anything
+          else, which is why it ships on its own.
+
+          ## Check this download
+
+          ```bash
+          gpg --import signing-key.asc
+          gpg --verify SHA256SUMS.asc SHA256SUMS
+          sha256sum -c SHA256SUMS --ignore-missing
+          ```
+
+          Compare the fingerprint gpg prints against
+          [docs/SIGNING.md](https://github.com/tilas01/Ventoy-Reproducible/blob/main/docs/SIGNING.md)
+          and the website. A key published beside the thing it signs proves
+          nothing on its own.
+
+          ## Then use it
+
+          ```bash
+          ventoy-verify release --key signing-key.asc
+          ```
+
+          It has no keyring. You name one public key file, and a signature made
+          by any other key is a failure rather than a warning, with both
+          fingerprints printed.
+
+          Exit `0` passed, `1` a verification failure, `2` the check could not
+          run.
+
+          ## What it is
+
+          Four Rust crates, `#![forbid(unsafe_code)]` in every crate root, no
+          `unsafe` anywhere in its own sources, clippy pedantic with warnings as
+          errors, and 42 tests. CI builds it twice in different directories and
+          fails if one byte differs, because a tool that reports on
+          reproducibility has no standing if its own binary is not reproducible.
+
+          ## Platforms
+
+          Linux x86-64, aarch64 and i686; Windows x86-64 and ARM64; macOS Intel
+          and Apple Silicon.
+          NOTES
+
+          if [ -n "$fpr" ]; then
+            printf '\n---\n\nSigned by `%s`.\n' "$fpr" >> /tmp/notes.md
+          fi
+
+          gh release create "$TAG" \
+            --repo '${{ github.repository }}' \
+            --title "ventoy-verify ${TAG#verify-}" \
+            --notes-file /tmp/notes.md \
+            release/*
+
+      - name: Remove the key material from the runner
+        if: always() && env.GNUPGHOME != ''
+        run: |
+          gpgconf --kill all 2>/dev/null || true
+          rm -rf "$GNUPGHOME"
+          echo "signing material removed"
