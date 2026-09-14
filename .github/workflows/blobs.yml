@@ -4,12 +4,13 @@
 #
 # # The shape of the argument
 #
-# Upstream's tree contains 806 files whose first bytes say "program". Not one of
-# them was compiled by anybody outside the project. This workflow compiles them
-# in a container whose image is pinned by digest, using toolchains pinned by
-# SHA-256, with the clock and the locale and the paths all fixed, and it does it
-# twice in two different directories. Then it writes a manifest saying, for each
-# file, whether the two builds agreed.
+# Upstream's tree contains 1079 executable binaries, 754 loose and 325
+# compressed. Not one of them was compiled by anybody outside the project.
+#
+# This workflow compiles them in a container whose image is pinned by digest,
+# using toolchains pinned by SHA-256, with the clock and the locale and the
+# paths all fixed, and it does it twice in two different directories. Then it
+# writes a manifest saying, for each file, whether the two builds agreed.
 #
 # # What it does not claim
 #

@@ -30,7 +30,7 @@
 <main>
 
   <h1>Ventoy<span class="sep">-</span>Reproducible</h1>
-  <p class="tagline">Trust is not verification, and Ventoy asks for trust 806 times.</p>
+  <p class="tagline">Trust is not verification, and Ventoy asks for trust 1079 times.</p>
 
   <p>
     <a href="https://github.com/ventoy/Ventoy">Ventoy</a> is genuinely good
@@ -41,11 +41,12 @@
   <h2>The problem</h2>
 
   <p>
-    Ventoy's repository contains <strong>806 files whose first bytes say &ldquo;this
-    is a program&rdquo;</strong>: bootloaders, EFI drivers, kernel modules, Windows
-    executables. They are committed to git as finished binaries. When you install
-    Ventoy, those exact files are written to your USB stick, and your computer runs
-    them before your operating system starts.
+    Ventoy's repository contains <strong>1079 executable binaries</strong>: 754
+    committed as loose ELF and PE files, and a further 325 committed compressed,
+    which a running system unpacks and executes. Bootloaders, EFI drivers, 59
+    kernel modules, Windows executables. When you install Ventoy, those exact
+    files are written to your USB stick, and your computer runs them before your
+    operating system starts.
   </p>
 
   <p><strong>Not one of them was compiled by anybody outside the project.</strong></p>
@@ -94,9 +95,9 @@ ventoy-verify release --key signing-key.asc</code></pre>
 <pre><code><span class="c-ok">OK</span> signature over manifest.json is good
    made by a signing subkey of 4E5F DAEA DF0E 4EB5 749F 7AB1 4FFA 1EB9 69BE 7BBD
 
-806 files checked
-  806 matched the manifest
-    786 compiled by this project's CI
+1079 files checked
+  1079 matched the manifest
+    1059 compiled by this project's CI
     20 third-party binaries, pinned by hash and <span class="c-warn">not built here</span>
 
 <span class="c-ok">PASSED.</span> every file matches the manifest.</code></pre>
@@ -120,20 +121,21 @@ cargo build --release -p ventoy-verify-gui</code></pre>
 <pre><code>python3 tools/inventory/inventory.py --print-counts</code></pre>
 
   <div class="counts">
-    <b>806</b><span>executables in the tree</span>
+    <b>1079</b><span>executable binaries in the tree</span>
+    <b>754</b><span>&hellip;committed loose, as ELF or PE</span>
+    <b>325</b><span>&hellip;committed compressed, unpacked at runtime</span>
     <b>182</b><span>paths named in upstream's <code>BLOB_List.md</code></span>
-    <b>176</b><span>named and actually present</span>
-    <b class="big">630</b><span>present but not named anywhere</span>
-    <b>574</b><span>&hellip;of those, GRUB2 modules</span>
-    <b>30</b><span>&hellip;kernel modules with no build instructions at all</span>
+    <b class="big">903</b><span>present but not named anywhere</span>
+    <b>859</b><span>&hellip;of those, GRUB2 modules</span>
+    <b>59</b><span>&hellip;Linux kernel modules, named by nothing</span>
   </div>
 
   <p class="small muted">
-    The 574 GRUB2 modules are covered collectively by one build instruction rather
-    than named, which is reasonable. The 30 kernel modules under
-    <code>LiveCD/VTOY/ventoy/drivers/</code> are covered by nothing. This is the
-    ordinary drift of a hand-maintained list, which is why this project derives
-    its inventory by machine on every run.
+    The 859 GRUB2 modules are covered collectively by one build instruction rather
+    than named, which is reasonable. The 59 Linux kernel modules are covered by
+    nothing. This is the ordinary drift of a hand-maintained list beside a
+    generated set, which is why this project derives its inventory by machine on
+    every run, from magic bytes rather than from file names.
   </p>
 
   <h3>Rebuild it all yourself</h3>
@@ -207,7 +209,7 @@ bash tools/build/fetch-toolchains.sh toolchains/cache
           about aarch64.</li>
       <li>Twenty files are third-party binaries that can only be pinned, never
           built here. They are counted separately, everywhere.</li>
-      <li>Most of the 806 are not yet built by this project. Every unbuilt path is
+      <li>Most of the 1079 are not yet built by this project. Every unbuilt path is
           named with a reason in every manifest.</li>
       <li>The builds run on GitHub's infrastructure. The detached signature narrows
           what a compromise there could achieve; it does not eliminate it.</li>

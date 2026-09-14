@@ -18,7 +18,7 @@
 #
 # # Honesty about coverage
 #
-# This does not build all 806 executables in the tree, and the manifest never
+# This does not build all 1079 executables in the tree, and the manifest never
 # claims it does. Components are wired in one at a time, each with its own
 # recipe below; anything not named here is recorded as `not-built` with a
 # reason. Growing this list is the main work of the project and the reports say

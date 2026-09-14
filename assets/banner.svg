@@ -20,9 +20,9 @@
      role="img" aria-label="Ventoy-Reproducible: every binary compiled in public">
 
   <title>Ventoy-Reproducible</title>
-  <desc>806 executables ship inside Ventoy uncompiled by anyone outside the
-        project. This fork builds them in public CI, twice, and signs the
-        result.</desc>
+  <desc>1079 executable binaries ship inside Ventoy, uncompiled by anyone
+        outside the project. This fork builds them in public CI, twice, and
+        signs the result.</desc>
 
   <defs>
     <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
@@ -43,7 +43,7 @@
           letter-spacing="-0.5">Ventoy<tspan fill="#7aa2f7">-</tspan>Reproducible</text>
 
     <text x="74" y="152" fill="#737aa2" font-size="19">
-      Trust is not verification, and Ventoy asks for trust 806 times.
+      Trust is not verification, and Ventoy asks for trust 1079 times.
     </text>
 
     <text x="74" y="196" fill="#9ece6a" font-size="17">

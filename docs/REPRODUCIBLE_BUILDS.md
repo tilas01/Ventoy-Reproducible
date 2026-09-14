@@ -139,7 +139,7 @@ unverified compiler you got, not that the compiler is honest.
   Diverse double-compilation would address this and is not done here.
 - **Twenty files cannot be built here at all.** They are third-party signed
   binaries. Pinning records which file you got and derives nothing.
-- **Most of the 806 are not yet built by this project.** Every unbuilt path is
+- **Most of the 1079 are not yet built by this project.** Every unbuilt path is
   named with a reason in every manifest, rather than omitted.
 - **Signing is not part of the reproducible artefact.** It happens after the
   build. Verify the hash first, then the signature over the hash file.

@@ -8,7 +8,7 @@
 
 # Ventoy-Reproducible
 
-**Trust is not verification, and Ventoy asks for trust 806 times.**
+**Trust is not verification, and Ventoy asks for trust 1079 times.**
 
 ### → [tilas01.github.io/Ventoy-Reproducible](https://tilas01.github.io/Ventoy-Reproducible/)
 
@@ -22,11 +22,12 @@ It exists because of one property that has nothing to do with intent.
 
 ## The problem
 
-Ventoy's repository contains **806 files whose first bytes say "this is a
-program"**: bootloaders, EFI drivers, kernel modules, Windows executables. They
-are committed to git as finished binaries. When you install Ventoy, those exact
-files are written to your USB stick and your computer executes them before your
-operating system starts.
+Ventoy's repository contains **1079 executable binaries**: 754 committed as
+loose ELF and PE files, and a further 325 committed compressed, which a running
+system unpacks and executes. Bootloaders, EFI drivers, 59 kernel modules,
+Windows executables. When you install Ventoy, those exact files are written to
+your USB stick and your computer runs them before your operating system
+starts.
 
 Not one of them was compiled by anybody outside the project.
 
@@ -62,7 +63,7 @@ all**. A gap nobody is told about is a gap nobody closes.
 
 ## Honest status
 
-This project does not yet rebuild all 806 files, and it will never claim to.
+This project does not yet rebuild all 1079 files, and it will never claim to.
 
 | | |
 |---|---|
@@ -81,18 +82,24 @@ Deriving the inventory by machine rather than reading upstream's own
 `BLOB_List.md` gives different numbers, and they are worth knowing:
 
 ```
-executables in the tree          806
-paths named in BLOB_List.md      182
-named and present                176
-present but undocumented         630
-  of those, GRUB2 modules        574
-  of those, everything else       56
+executables in tree          1079
+loose                         754
+compressed                    325
+paths named in blob list      182
+named and present             176
+present but undocumented      903
+grub2 modules                 859
+linux kernel modules           59
 ```
 
-574 of the undocumented files are GRUB2 modules that the list covers
-collectively with one instruction rather than naming. The other 56 are not
-covered by anything, and 30 of those are committed Linux kernel modules with no
-build instruction recorded anywhere in the repository.
+859 of the undocumented files are GRUB2 modules, which the list covers
+collectively with a single "build grub2" instruction rather than naming
+individually. That is reasonable, and it means a reader counting entries in the
+table undercounts the tree roughly sixfold.
+
+The 59 Linux kernel modules are the sharper case. They are committed `.ko` and
+`.ko.xz` files that load into a running kernel, and the blob list does not
+mention them at all.
 
 Run it yourself:
 

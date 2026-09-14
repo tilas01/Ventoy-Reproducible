@@ -1,54 +1,75 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Count what is actually in the tree, rather than what a document says is in it.
+# Count the executables Ventoy commits, by looking at what the files are rather
+# than at what they are called.
 #
 # # Why this exists
 #
 # Upstream ships `BLOB_List.md`, a hand-maintained table of the binaries it
 # commits. It is a good-faith document and it is out of date, which is what
-# happens to every hand-maintained list of a generated set. When this script was
-# first run against Ventoy 1.1.07 it found:
+# happens to every hand-written list of a generated set. Deriving the same set
+# by machine against Ventoy 1.1.07 finds a much larger number.
 #
-#   * 182 paths named in BLOB_List.md
-#   * 150 of those actually present in the tree
-#   * 754 files in the tree whose first bytes are ELF or PE magic
-#   * 604 executables present that BLOB_List.md does not mention at all
+# # Why detection is by magic bytes and not by extension
 #
-# Of the 604, 574 are GRUB2 modules under INSTALL/grub/, which the list covers
-# collectively with one "build grub2" instruction rather than naming. The other
-# 30 are Linux kernel modules under LiveCD/VTOY/ventoy/drivers/ with no build
-# instruction recorded anywhere in the repository.
+# An earlier version of this script classified a file as a binary if its first
+# bytes were ELF or PE magic, or if its *name* ended in `.xz`, `.gz`, `.zst` or
+# `.lz4`. That produced 806, and 806 is not a number that means anything: it is
+# 754 real executables plus 52 files that merely had a compression suffix,
+# while ignoring hundreds of compressed executables whose names end in
+# something else.
+#
+# The fix is to open the archives. A file is counted when its own first bytes
+# are ELF or PE, or when decompressing it yields ELF or PE. That is the honest
+# question, because `busybox64.xz` and `dm-mod.ko.xz` are executables that a
+# running system unpacks and uses, and a reader has exactly as little ability
+# to verify them as any loose binary.
+#
+# Against Ventoy 1.1.07 that gives:
+#
+#     1079 executables    754 loose, 325 compressed
+#      182 paths named in BLOB_List.md
+#       59 Linux kernel modules
 #
 # None of that is an accusation. It is the ordinary drift of a list a person
-# updates by hand, and it is exactly why this project derives its inventory from
-# the tree by machine on every run instead of trusting a table.
+# updates by hand beside a set a build script generates, and it is why this
+# project derives its inventory by machine on every run.
 #
 # # Output
 #
-# Writes `inventory.json`: every executable in the tree, whether the blob list
-# names it, and what upstream says its origin is. That file is the input to the
-# manifest generator, and CI fails when the counts drift without the drift being
-# recorded.
+# Writes `inventory.json`: every executable, whether the blob list names it, and
+# what upstream says its origin is. That file feeds the manifest generator.
 
 import argparse
+import bz2
+import collections
+import gzip
 import hashlib
 import json
+import lzma
 import os
 import re
 import subprocess
 import sys
 
 # The first bytes that mean "this is a program", for the formats Ventoy ships.
-MAGIC = (
-    (b"\x7fELF", "elf"),
-    (b"MZ", "pe"),
-)
+EXECUTABLE_MAGIC = (b"\x7fELF", b"MZ")
 
-# Compressed executables. Upstream commits several binaries only in xz form and
-# the blob list names them without the suffix, which is most of the reason 32 of
-# its entries look missing.
-COMPRESSED_SUFFIXES = (".xz", ".gz", ".zst", ".lz4")
+# Compressed containers worth opening. Each maps to the module that reads it.
+# zip is deliberately absent: the three in the tree are source archives rather
+# than single compressed executables, and treating one as "an executable" would
+# be a category error in the other direction.
+COMPRESSORS = {
+    b"\xfd7zXZ": lzma.open,
+    b"\x1f\x8b": gzip.open,
+    b"BZh": bz2.open,
+}
+
+# How far to read inside an archive. Four bytes is all a magic check needs, and
+# reading more of a 30 MB kernel module several hundred times is a minute of CI
+# spent learning nothing.
+PEEK = 8
 
 
 def tracked_files(root):
@@ -61,18 +82,37 @@ def tracked_files(root):
     return [p for p in out.stdout.decode("utf-8").split("\0") if p]
 
 
+def looks_executable(head):
+    return any(head.startswith(m) for m in EXECUTABLE_MAGIC)
+
+
 def classify(path):
-    """Return 'elf', 'pe', 'compressed' or None for one file."""
+    """Return 'loose', 'compressed' or None for one file.
+
+    'compressed' means the file is an archive whose contents begin with
+    executable magic. A corrupt or truncated archive returns None rather than
+    raising: a file this script cannot read is a file it should not count, and
+    a crash part way through an inventory is worse than a conservative answer.
+    """
     try:
         with open(path, "rb") as handle:
-            head = handle.read(4)
+            head = handle.read(PEEK)
     except OSError:
         return None
-    for magic, kind in MAGIC:
+
+    if looks_executable(head):
+        return "loose"
+
+    for magic, opener in COMPRESSORS.items():
         if head.startswith(magic):
-            return kind
-    if path.endswith(COMPRESSED_SUFFIXES):
-        return "compressed"
+            try:
+                with opener(path, "rb") as handle:
+                    if looks_executable(handle.read(PEEK)):
+                        return "compressed"
+            except Exception:
+                return None
+            return None
+
     return None
 
 
@@ -88,8 +128,8 @@ def parse_blob_list(root):
     entries = {}
     source = None
     recipe = None
-    # `rowspan` means a row can inherit the previous row's source and recipe, so
-    # the parser carries them forward rather than treating a short row as blank.
+    # `rowspan` lets a row inherit the previous row's source and recipe, so the
+    # parser carries them forward rather than treating a short row as blank.
     for row in re.findall(r"<tr>(.*?)</tr>", src, re.S):
         cells = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
         if not cells:
@@ -105,18 +145,30 @@ def parse_blob_list(root):
 
         clean = path[2:] if path.startswith("./") else path
         clean = clean.replace("\\", "/")
-        # Two entries are spelled ISNTALL rather than INSTALL. Corrected here and
-        # flagged, rather than silently rewritten: a path that does not exist
-        # should be visible.
+        # Two entries are spelled ISNTALL rather than INSTALL. Corrected and
+        # flagged rather than silently rewritten: a path that does not exist
+        # should stay visible.
         typo = clean.startswith("ISNTALL/")
         if typo:
             clean = "INSTALL/" + clean[len("ISNTALL/"):]
-        entries[clean] = {
-            "source": source,
-            "recipe": recipe,
-            "upstream_typo": typo,
-        }
+        entries[clean] = {"source": source, "recipe": recipe, "upstream_typo": typo}
     return entries
+
+
+def describes(listed, rel):
+    """Find the blob list entry for a path, allowing for a missing suffix.
+
+    The list names several files without the compression suffix they actually
+    carry, so `busybox32` in the table is `busybox32.xz` on disk. Matching both
+    spellings is the difference between six entries looking missing and six
+    entries being found.
+    """
+    if rel in listed:
+        return listed[rel]
+    for suffix in (".xz", ".gz", ".bz2", ".zst", ".lz4"):
+        if rel.endswith(suffix) and rel[: -len(suffix)] in listed:
+            return listed[rel[: -len(suffix)]]
+    return None
 
 
 def sha256(path):
@@ -140,44 +192,37 @@ def build(root, with_hashes):
         if kind is None:
             continue
 
-        described = listed.get(rel)
-        # A blob list entry without its compression suffix still describes the
-        # file that is really there. Match both spellings before calling it
-        # undocumented.
-        if described is None:
-            for suffix in COMPRESSED_SUFFIXES:
-                if rel.endswith(suffix) and rel[: -len(suffix)] in listed:
-                    described = listed[rel[: -len(suffix)]]
-                    break
-
-        record = {
+        described = describes(listed, rel)
+        records.append({
             "path": rel,
             "kind": kind,
             "size": os.path.getsize(full),
             "documented": described is not None,
             "origin": (described or {}).get("source"),
             "recipe": (described or {}).get("recipe"),
-        }
-        if with_hashes:
-            record["sha256"] = sha256(full)
-        records.append(record)
+            **({"sha256": sha256(full)} if with_hashes else {}),
+        })
 
     records.sort(key=lambda r: r["path"])
 
-    listed_present = sum(1 for r in records if r["documented"])
-    grub = sum(
-        1
-        for r in records
-        if not r["documented"] and r["path"].startswith("INSTALL/grub/")
+    documented = sum(1 for r in records if r["documented"])
+    kinds = collections.Counter(r["kind"] for r in records)
+    grub = sum(1 for r in records if r["path"].startswith("INSTALL/grub/"))
+    kmods = sum(
+        1 for r in records
+        if re.search(r"\.ko(\.(xz|gz|bz2))?$", r["path"])
     )
+
     return {
         "counts": {
             "executables_in_tree": len(records),
+            "loose": kinds["loose"],
+            "compressed": kinds["compressed"],
             "paths_named_in_blob_list": len(listed),
-            "named_and_present": listed_present,
-            "present_but_undocumented": len(records) - listed_present,
-            "undocumented_grub_modules": grub,
-            "undocumented_other": len(records) - listed_present - grub,
+            "named_and_present": documented,
+            "present_but_undocumented": len(records) - documented,
+            "grub2_modules": grub,
+            "linux_kernel_modules": kmods,
         },
         "files": records,
     }
@@ -190,13 +235,11 @@ def main():
     parser.add_argument("--root", default=".", help="repository root")
     parser.add_argument("--out", default="inventory.json", help="where to write")
     parser.add_argument(
-        "--hashes",
-        action="store_true",
+        "--hashes", action="store_true",
         help="also record SHA-256 of every file, which is slower",
     )
     parser.add_argument(
-        "--print-counts",
-        action="store_true",
+        "--print-counts", action="store_true",
         help="print the summary and write nothing",
     )
     args = parser.parse_args()
@@ -206,7 +249,7 @@ def main():
 
     if args.print_counts:
         for key, value in counts.items():
-            print(f"{key.replace('_', ' '):<32} {value}")
+            print(f"{key.replace('_', ' '):<28} {value}")
         return 0
 
     with open(args.out, "w", encoding="utf-8", newline="\n") as handle:
@@ -215,7 +258,7 @@ def main():
 
     print(f"wrote {args.out}")
     for key, value in counts.items():
-        print(f"  {key.replace('_', ' '):<32} {value}")
+        print(f"  {key.replace('_', ' '):<28} {value}")
     return 0
 
 

@@ -33,30 +33,45 @@ computers.
 ### 1.1 How many files
 
 Upstream documents its committed binaries in `BLOB_List.md`, a hand-written
-table with 182 entries. Deriving the same set by machine, by reading the first
-bytes of every tracked file, gives a different picture:
+table with 182 entries. Deriving the same set by machine gives a different
+picture:
 
 | | |
 |---|---|
-| Files in the tree with ELF or PE magic | **806** |
+| Executable binaries in the tree | **1079** |
+| ...committed loose, as ELF or PE | 754 |
+| ...committed compressed, unpacked at runtime | 325 |
 | Paths named in `BLOB_List.md` | 182 |
 | Named and actually present | 176 |
-| Present but not named anywhere | **630** |
-| ...of those, GRUB2 modules under `INSTALL/grub/` | 574 |
-| ...of those, everything else | 56 |
-| ...of those, kernel modules with no recorded build instructions | 30 |
+| Present but not named anywhere | **903** |
+| ...of those, GRUB2 modules under `INSTALL/grub/` | 859 |
+| Linux kernel modules, named by nothing | 59 |
 
 Reproduce this with `python3 tools/inventory/inventory.py --print-counts`.
 
-The 574 GRUB2 modules are covered collectively by a single "build grub2"
-instruction rather than named individually, which is reasonable. The effect is
-still that a reader counting the table undercounts the tree by a factor of four.
+**On counting compressed files.** A file is counted when its own first bytes are
+ELF or PE, *or* when decompressing it yields ELF or PE. That second clause is
+not padding. `busybox64.xz` and `dm-mod.ko.xz` are executables that a running
+system unpacks and uses, and a reader has exactly as little ability to check
+them as any loose binary. Excluding them would understate the problem by 325.
 
-The 30 kernel modules under `LiveCD/VTOY/ventoy/drivers/` are `.ko` files with
-no build instruction recorded anywhere in the repository, and no entry in the
-blob list. They are the clearest single example of the problem: committed
-binaries that load into a running kernel, whose provenance is not documented at
-all.
+Detection is by magic bytes rather than by file name, and the distinction
+mattered: an earlier version of this project's own inventory script classified
+by extension and published 806, a figure that turned out to be 754 real
+executables plus 52 files that merely ended in `.xz`, while missing hundreds of
+compressed executables whose names ended in something else. That error is
+recorded here rather than quietly corrected, because a project about verifying
+other people's numbers has to show its own being wrong.
+
+The 859 GRUB2 modules are covered collectively by a single "build grub2"
+instruction rather than named individually, which is reasonable. The effect is
+still that a reader counting entries in the table undercounts the tree roughly
+sixfold.
+
+The 59 Linux kernel modules are the sharper case. They are committed `.ko` and
+`.ko.xz` files that load into a running kernel, and the blob list does not
+mention them at all. They are the clearest single example of the problem:
+binaries with full kernel privileges whose provenance is documented nowhere.
 
 ### 1.2 This is not an accusation
 
@@ -211,7 +226,7 @@ usual cause is a toolchain difference, and closing it is ordinary work.
 One file: `manifest.json`. It names every artefact with its size and both
 digests, so a signature over it is a signature over the whole collection.
 
-Signing 806 files individually would produce 806 signatures nobody checks, and
+Signing 1079 files individually would produce 1079 signatures nobody checks, and
 would leave the *set* unsigned: a file could be removed from a release and no
 signature would fail. With one manifest, a missing file is a verification
 failure.
@@ -243,7 +258,7 @@ reader chooses the key file.
 
 The signature is checked **before** the manifest is parsed, and the manifest's
 schema and digests are validated **before** any file it names is opened. In the
-other order, a hostile manifest has already directed 806 file reads before
+other order, a hostile manifest has already directed 1079 file reads before
 anything questioned where it came from. Manifest paths are refused if they are
 absolute or contain a parent component, because a manifest downloaded from a
 release page is untrusted input.
@@ -269,7 +284,8 @@ version a user is actually looking for stays visible.
 
 As of 2026-09-10, against Ventoy 1.1.07:
 
-- **806** executables identified in the tree by machine.
+- **1079** executable binaries identified in the tree by machine, 754 loose and
+  325 compressed.
 - **7** build dependencies pinned by SHA-256 that upstream fetched unverified.
 - **2** of those 7 confirmed byte-identical to their canonical upstream
   releases: musl 1.2.1 against musl.libc.org, GRUB 2.04 against ftp.gnu.org.
@@ -304,7 +320,7 @@ If you read only one section, read this one.
    aarch64.
 5. Twenty files can only be pinned, never built here, and are counted
    separately everywhere.
-6. Most of the 806 are not yet built by this project. Each unbuilt path is named
+6. Most of the 1079 are not yet built by this project. Each unbuilt path is named
    with a reason in every manifest.
 7. The builds run on GitHub's infrastructure. The detached signature narrows
    what a compromise there could achieve; it does not eliminate it.

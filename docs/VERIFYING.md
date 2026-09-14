@@ -32,7 +32,7 @@ The order is the security property, not an implementation detail.
 6. **Prints failures first**, then counts, then a verdict.
 
 Doing this in the other order, hashing first and checking the signature at the
-end, means a hostile manifest has already directed 806 file reads before
+end, means a hostile manifest has already directed 1079 file reads before
 anything questioned where it came from.
 
 ## Reading the output
@@ -41,9 +41,9 @@ anything questioned where it came from.
 OK signature over manifest.json is good
    made by a signing subkey of 2666 F714 9F1F 786C AFE6 B452 D205 837B F772 13F9
 
-806 files checked
-  806 matched the manifest
-    786 compiled by this project's CI
+1079 files checked
+  1079 matched the manifest
+    1059 compiled by this project's CI
     20 third-party binaries, pinned by hash and not built here
 
 PASSED. every file matches the manifest. Some were not built here; see the
@@ -51,7 +51,7 @@ counts above.
 ```
 
 The counts are printed separately and are never added together. There is no
-line saying "806 verified", because 20 of those files are third-party binaries
+line saying "1079 verified", because 20 of those files are third-party binaries
 nobody here compiled, and presenting them as equally verified would be false.
 
 ## Exit codes
