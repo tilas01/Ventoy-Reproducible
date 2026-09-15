@@ -74,14 +74,35 @@ unpack_once() {
     fi
 
     echo "  unpacking $archive ($(stat -c %s "$path" 2>/dev/null || echo '?') bytes)"
-    if ! tar -xf "$path" -C /opt 2>/tmp/tar-error; then
-        echo "  TAR FAILED for $archive:"
-        sed 's/^/      /' /tmp/tar-error
-        return 1
-    fi
-    if [ ! -d "$dir" ]; then
-        echo "  TAR SUCCEEDED but $dir does not exist. /opt now holds:"
-        ls -1 /opt | sed 's/^/      /'
+
+    # The decompressor is named explicitly and piped, rather than relying on
+    # tar working out the format from the file. CentOS 7 ships GNU tar 1.26,
+    # and its auto-detection depends on helper binaries being found in a PATH
+    # this script has just rewritten. Naming the tool removes that variable and
+    # makes a missing decompressor an obvious error rather than a silent one.
+    local decompress
+    case "$archive" in
+        *.tar.xz)  decompress="xz -dc" ;;
+        *.tar.bz2) decompress="bzip2 -dc" ;;
+        *.tar.gz)  decompress="gzip -dc" ;;
+        *)         decompress="cat" ;;
+    esac
+
+    local rc=0
+    $decompress "$path" 2>/tmp/decomp-error | tar -xf - -C /opt 2>/tmp/tar-error || rc=$?
+
+    if [ "$rc" -ne 0 ] || [ ! -d "$dir" ]; then
+        echo "  UNPACK FAILED for $archive (exit $rc)"
+        echo "    decompressor: $decompress"
+        [ -s /tmp/decomp-error ] && { echo "    decompressor said:"; sed 's/^/      /' /tmp/decomp-error; }
+        [ -s /tmp/tar-error ] && { echo "    tar said:"; sed 's/^/      /' /tmp/tar-error; }
+        [ -s /tmp/decomp-error ] || [ -s /tmp/tar-error ] || echo "    both were silent"
+        echo "    tar version:  $(tar --version 2>&1 | head -1)"
+        echo "    decompressor: $(command -v "${decompress%% *}" || echo 'NOT FOUND')"
+        echo "    free space on /opt:"
+        df -h /opt 2>&1 | sed 's/^/      /'
+        echo "    /opt now holds:"
+        ls -1 /opt 2>&1 | sed 's/^/      /'
         return 1
     fi
     echo "  unpacked: $dir"
