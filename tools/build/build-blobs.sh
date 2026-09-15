@@ -73,6 +73,13 @@ echo "SOURCE_DATE_EPOCH: $SOURCE_DATE_EPOCH ($(date -u -d "@$SOURCE_DATE_EPOCH" 
 echo "toolchains:        /toolchains"
 echo ""
 
+# Unpack the pinned cross toolchains, build dietlibc from its pinned source,
+# and build the fat_io_lib archives that two components link against and none
+# of them builds. Sourced rather than run, because it exports PATH.
+#
+# shellcheck source=tools/build/prepare-toolchains.sh
+. "$(dirname "${BASH_SOURCE[0]}")/prepare-toolchains.sh"
+
 # ---------------------------------------------------------------------------
 # Recipes
 # ---------------------------------------------------------------------------
@@ -127,12 +134,22 @@ run_recipe() {
 }
 
 # ---------------------------------------------------------------------------
-# Self-contained C tools
+# What can be built with the toolchains this project has pinned
 # ---------------------------------------------------------------------------
 #
-# These are the components that build with the system compiler and no cross
-# toolchain, which makes them the ones to wire first: they exercise the whole
-# pipeline, from environment to manifest, without waiting on a 260 MB download.
+# The first real run of this script found the difference between "a build script
+# exists" and "a build script can run". Four of the six components wired here
+# failed, for two reasons worth separating.
+#
+# `vtoycli` and `vtoyfat` link against `fat_io_lib/lib/libfat_io_*.a`, which is
+# not committed and which their own `build.sh` does not build. That is fixable
+# and is fixed: `prepare-toolchains.sh` runs the `buildlib.sh` beside each.
+#
+# `vtoyfat` and `vtoygpt` also call `mips64el-linux-musl-gcc`. That compiler
+# lives at `/opt/mips64el-linux-musl-gcc730`, which is on the PATH upstream's
+# `all_in_one.sh` sets and is not among the seven archives upstream's CI
+# downloads. It is not fixable from anything in this repository, so those two
+# are recorded as not built, by name, with that reason.
 
 if run_recipe vtoytool VtoyTool/build.sh; then
     collect VtoyTool/vtoytool/00/vtoytool_32 VtoyTool/vtoytool/00/vtoytool_32 vtoytool || true
@@ -151,14 +168,6 @@ if run_recipe vtoycli vtoycli/build.sh; then
     done
 fi
 
-if run_recipe vtoyfat vtoyfat/build.sh; then
-    :
-fi
-
-if run_recipe vtoygpt vtoygpt/build.sh; then
-    :
-fi
-
 if run_recipe vblade VBLADE/vblade-master/build.sh; then
     for suffix in 32 64 aa64; do
         collect "VBLADE/vblade-master/vblade_$suffix" \
@@ -167,12 +176,18 @@ if run_recipe vblade VBLADE/vblade-master/build.sh; then
 fi
 
 # ---------------------------------------------------------------------------
-# Components that need the pinned cross toolchains
+# What cannot be built, and why
 # ---------------------------------------------------------------------------
 #
-# Recorded rather than attempted, until each is wired and shown to reproduce.
-# Naming them individually is the point: "some components are not yet built" is
-# not a status anybody can act on.
+# Naming each one is the point. "Some components are not yet built" is not a
+# status anybody can act on; a path and a reason is.
+
+MUSL_REASON="needs mips64el-linux-musl-gcc, which is on upstream's build PATH \
+but is not among the seven archives upstream's CI downloads and cannot be \
+built from anything in this repository"
+
+record_skip "vtoyfat" "$MUSL_REASON"
+record_skip "vtoygpt" "$MUSL_REASON"
 
 record_skip "INSTALL/EFI/BOOT/BOOTX64.EFI"     "third-party signed shim from a Rocky Linux ISO; cannot be built here, only pinned"
 record_skip "INSTALL/EFI/BOOT/mmx64.efi"       "third-party signed binary from a Rocky Linux ISO; cannot be built here, only pinned"
@@ -183,11 +198,11 @@ record_skip "INSTALL/ventoy/imdisk"            "third-party Windows driver, Auth
 record_skip "INSTALL/ventoy/memdisk"           "third-party binary from the syslinux project; cannot be built here, only pinned"
 record_skip "INSTALL/ventoy/7z"                "third-party binary from the 7-Zip project; cannot be built here, only pinned"
 record_skip "LiveCD/ISO/EFI/boot/vmlinuz64"    "third-party kernel from TinyCore; cannot be built here, only pinned"
-record_skip "INSTALL/grub"                     "GRUB2 modules; recipe wired but the cross build is not yet enabled in CI"
-record_skip "INSTALL/ventoy/ventoy_x64.efi"    "EDK2 build; recipe wired but the cross build is not yet enabled in CI"
+record_skip "INSTALL/grub"                     "GRUB2 modules; the cross build is not yet enabled in CI"
+record_skip "INSTALL/ventoy/ventoy_x64.efi"    "EDK2 build; not yet enabled in CI"
 record_skip "Unix/ventoy_unix"                 "BSD kernel modules; need a FreeBSD builder, which a Linux container is not"
-record_skip "INSTALL/Ventoy2Disk.exe"          "Windows build; needs the Windows job, not this container"
-record_skip "LiveCD/VTOY/ventoy/drivers"       "30 Linux kernel modules with no build instructions recorded anywhere upstream"
+record_skip "INSTALL/Ventoy2Disk.exe"          "Windows build; needs a Windows job, not this container"
+record_skip "LiveCD/VTOY/ventoy/drivers"       "59 Linux kernel modules with no build instructions recorded anywhere upstream"
 
 # ---------------------------------------------------------------------------
 # Summary
