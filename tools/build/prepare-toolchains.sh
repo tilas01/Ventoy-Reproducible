@@ -42,33 +42,70 @@ set -euo pipefail
 TOOLCHAINS="${TOOLCHAINS:-/toolchains}"
 : "${SOURCE_DATE_EPOCH:?must be set by the caller}"
 
-echo "== unpacking toolchains from $TOOLCHAINS"
+echo "== what is actually in $TOOLCHAINS"
+if [ -d "$TOOLCHAINS" ]; then
+    ls -la "$TOOLCHAINS" | sed 's/^/  /'
+else
+    echo "  $TOOLCHAINS does not exist"
+fi
+echo ""
 
+echo "== unpacking toolchains"
+
+# An earlier version of this function printed "unpacked: $dir" straight after
+# calling tar, without checking that the directory it named had appeared. When
+# the unpack silently did nothing the log said it had worked, and the failure
+# surfaced three steps later as "command not found" for a compiler that was
+# never there.
+#
+# So: tar's own output is captured, its exit status is checked, and the
+# directory is confirmed to exist before anything claims success.
 unpack_once() {
-    # target directory, archive name, tar flag
-    local dir="$1" archive="$2" flag="$3"
+    local dir="$1" archive="$2"
+    local path="$TOOLCHAINS/$archive"
+
     if [ -d "$dir" ]; then
-        echo "  present: $dir"
+        echo "  present:  $dir"
         return 0
     fi
-    if [ ! -f "$TOOLCHAINS/$archive" ]; then
-        echo "  MISSING archive: $archive"
+    if [ ! -f "$path" ]; then
+        echo "  MISSING:  $archive is not in $TOOLCHAINS"
         return 1
     fi
-    tar "$flag" "$TOOLCHAINS/$archive" -C /opt
+
+    echo "  unpacking $archive ($(stat -c %s "$path" 2>/dev/null || echo '?') bytes)"
+    if ! tar -xf "$path" -C /opt 2>/tmp/tar-error; then
+        echo "  TAR FAILED for $archive:"
+        sed 's/^/      /' /tmp/tar-error
+        return 1
+    fi
+    if [ ! -d "$dir" ]; then
+        echo "  TAR SUCCEEDED but $dir does not exist. /opt now holds:"
+        ls -1 /opt | sed 's/^/      /'
+        return 1
+    fi
     echo "  unpacked: $dir"
 }
 
 unpack_once /opt/gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu \
-            gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu.tar.xz -xf || true
+            gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu.tar.xz || true
 unpack_once /opt/aarch64--uclibc--stable-2020.08-1 \
-            aarch64--uclibc--stable-2020.08-1.tar.bz2 -xf || true
+            aarch64--uclibc--stable-2020.08-1.tar.bz2 || true
 unpack_once /opt/mips-loongson-gcc7.3-linux-gnu \
-            mips-loongson-gcc7.3-2019.06-29-linux-gnu.tar.gz -xf || true
+            mips-loongson-gcc7.3-2019.06-29-linux-gnu.tar.gz || true
 
-export PATH="$PATH:/opt/gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu/bin"
-export PATH="$PATH:/opt/aarch64--uclibc--stable-2020.08-1/bin"
-export PATH="$PATH:/opt/mips-loongson-gcc7.3-linux-gnu/2019.06-29/bin"
+# PATH is built by discovery rather than by assumption. The three entries above
+# are the names upstream uses, and a tarball that extracts to something else
+# would otherwise leave a compiler on disk and invisible. Anything under /opt
+# with a `bin` directory goes on the path.
+for candidate in /opt/*/bin /opt/*/*/bin; do
+    [ -d "$candidate" ] || continue
+    case ":$PATH:" in
+        *":$candidate:"*) ;;
+        *) PATH="$PATH:$candidate" ;;
+    esac
+done
+export PATH
 
 # ---------------------------------------------------------------------------
 # dietlibc
@@ -96,11 +133,20 @@ build_dietlibc() {
     local scratch
     scratch="$(mktemp -d)"
 
+    # Output goes to a log rather than /dev/null. The first version of this
+    # discarded it, and when both builds failed in three milliseconds there was
+    # nothing to explain why: three milliseconds is not a compile, it is a
+    # command that never started.
     echo "== building dietlibc (64-bit)"
-    tar -xf "$archive" -C "$scratch"
+    if ! tar -xf "$archive" -C "$scratch" 2>&1; then
+        echo "  cannot unpack $archive"
+        rm -rf "$scratch"
+        return 1
+    fi
     ( cd "$scratch/dietlibc-0.34" \
-      && prefix=/opt/diet64 make -j"$(nproc)" >/dev/null 2>&1 \
-      && prefix=/opt/diet64 make install >/dev/null 2>&1 ) || true
+      && prefix=/opt/diet64 make -j"$(nproc)" \
+      && prefix=/opt/diet64 make install ) > "$scratch/diet64.log" 2>&1 \
+      || { echo "  64-bit build failed, last lines:"; tail -15 "$scratch/diet64.log" | sed 's/^/      /'; }
     rm -rf "$scratch/dietlibc-0.34"
 
     echo "== building dietlibc (32-bit)"
@@ -108,8 +154,9 @@ build_dietlibc() {
     ( cd "$scratch/dietlibc-0.34" \
       && sed -i 's/MYARCH:=.*/MYARCH=i386/' Makefile \
       && sed -i 's/CC=gcc/CC=gcc -m32/' Makefile \
-      && prefix=/opt/diet32 make -j"$(nproc)" >/dev/null 2>&1 \
-      && prefix=/opt/diet32 make install >/dev/null 2>&1 ) || true
+      && prefix=/opt/diet32 make -j"$(nproc)" \
+      && prefix=/opt/diet32 make install ) > "$scratch/diet32.log" 2>&1 \
+      || { echo "  32-bit build failed, last lines:"; tail -15 "$scratch/diet32.log" | sed 's/^/      /'; }
 
     rm -rf "$scratch"
 
@@ -137,8 +184,13 @@ build_fat_io_lib() {
         return 1
     fi
     echo "== building fat_io_lib in $dir"
-    ( cd "$dir" && bash buildlib.sh >/dev/null 2>&1 ) || true
-    ls "$dir/lib/" 2>/dev/null | sed 's/^/  /' || echo "  produced nothing"
+    ( cd "$dir" && bash buildlib.sh ) > "/tmp/fatlib.log" 2>&1 \
+      || { echo "  failed, last lines:"; tail -10 /tmp/fatlib.log | sed 's/^/      /'; }
+    if ls "$dir/lib/"*.a >/dev/null 2>&1; then
+        ls -1 "$dir/lib/" | sed 's/^/      /'
+    else
+        echo "      produced no archives"
+    fi
 }
 
 build_fat_io_lib vtoycli/fat_io_lib || true
