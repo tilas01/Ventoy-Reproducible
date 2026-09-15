@@ -77,18 +77,25 @@ jobs:
         run: bash tools/build/fetch-toolchains.sh toolchains/cache
 
       # The base image has no compiler, so it has to be built up before it can
-      # build anything. Layer caching keeps this to a few seconds after the
-      # first run. The image is never pushed anywhere: it exists for the length
-      # of this job and is rebuilt from a Dockerfile a reader can check.
+      # build anything. The image is never pushed anywhere: it exists for the
+      # length of this job, rebuilt from a Dockerfile a reader can check.
+      #
+      # Plain `docker build`, not `docker/build-push-action` with a GitHub
+      # Actions cache. That combination failed here with `buildx failed` and a
+      # pointer to the cache backend docs: `cache-to: type=gha` needs the
+      # Actions cache service, and this job runs through `workflow_call` with
+      # only the permissions its caller granted, which do not include it.
+      #
+      # The cache was an optimisation on a two minute yum install. Removing it
+      # costs a couple of minutes per run and removes a whole class of failure,
+      # along with a dependency on a third-party action in the one place where
+      # this project is deciding what compiles its binaries.
       - name: Build the builder
-        uses: docker/build-push-action@v6
-        with:
-          context: tools/build
-          file: tools/build/Dockerfile
-          tags: ${{ env.BUILDER_IMAGE }}
-          load: true
-          cache-from: type=gha,scope=builder
-          cache-to: type=gha,scope=builder,mode=max
+        run: |
+          docker build \
+            --file tools/build/Dockerfile \
+            --tag "$BUILDER_IMAGE" \
+            tools/build
 
       - name: Record what the builder actually is
         run: |
