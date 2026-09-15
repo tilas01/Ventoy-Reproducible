@@ -31,7 +31,7 @@ docker run --rm \
   -v "$PWD/out:/out" \
   -e SOURCE_DATE_EPOCH -e LC_ALL=C -e TZ=UTC \
   -e VTOY_WORKDIR=/build/alpha \
-  quay.io/centos/centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4 \
+  ventoy-reproducible-builder:centos7 \
   /bin/bash -c 'cp -a /ventoy "$VTOY_WORKDIR" && cd "$VTOY_WORKDIR" && bash tools/build/build-blobs.sh /out'
 ```
 

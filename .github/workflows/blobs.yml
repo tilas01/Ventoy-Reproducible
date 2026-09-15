@@ -44,7 +44,12 @@ env:
   # newer base silently makes output that will not run on the systems Ventoy
   # supports. Pinned by digest, because the `centos:7` tag is mutable and a
   # mutable base makes "reproducible" meaningless.
-  BUILDER_IMAGE: quay.io/centos/centos@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4
+  # The `centos7` tag on quay.io, resolved to its digest and checked to return
+  # HTTP 200 before being written here. The previous value in this slot was a
+  # plausible looking digest that belonged to no image, and every scheduled
+  # build failed on `manifest unknown` until it was replaced.
+  BUILDER_BASE: quay.io/centos/centos@sha256:e4ca2ed0202e76be184e75fb26d14bf974193579039d5573fb2348664deef76e
+  BUILDER_IMAGE: ventoy-reproducible-builder:centos7
   LC_ALL: C.UTF-8
   TZ: UTC
 
@@ -71,8 +76,31 @@ jobs:
       - name: Fetch the toolchains and check them against the lock
         run: bash tools/build/fetch-toolchains.sh toolchains/cache
 
+      # The base image has no compiler, so it has to be built up before it can
+      # build anything. Layer caching keeps this to a few seconds after the
+      # first run. The image is never pushed anywhere: it exists for the length
+      # of this job and is rebuilt from a Dockerfile a reader can check.
+      - name: Build the builder
+        uses: docker/build-push-action@v6
+        with:
+          context: tools/build
+          file: tools/build/Dockerfile
+          tags: ${{ env.BUILDER_IMAGE }}
+          load: true
+          cache-from: type=gha,scope=builder
+          cache-to: type=gha,scope=builder,mode=max
+
+      - name: Record what the builder actually is
+        run: |
+          # Printed into the log so that two builds which disagree can be told
+          # apart by what compiled them, rather than only by their output.
+          docker image inspect "$BUILDER_IMAGE" --format '{{.Id}}'
+          docker run --rm "$BUILDER_IMAGE" gcc --version | head -1
+          docker run --rm "$BUILDER_IMAGE" ld --version | head -1
+
       - name: Compile
         run: |
+          mkdir -p out
           docker run --rm \
             -v "$PWD:/ventoy:ro" \
             -v "$PWD/toolchains/cache:/toolchains:ro" \
@@ -129,7 +157,7 @@ jobs:
             --ventoy-version "${{ inputs.upstream_release || 'unreleased' }}" \
             --commit "$GITHUB_SHA" \
             --source-date-epoch "$(git log -1 --pretty=%ct)" \
-            --builder-image "$BUILDER_IMAGE" \
+            --builder-image "$BUILDER_BASE" \
             --workflow-run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --out manifest.json \
             --summary "$GITHUB_STEP_SUMMARY"

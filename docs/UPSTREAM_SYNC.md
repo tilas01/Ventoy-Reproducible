@@ -10,7 +10,7 @@ So this fork never decides for itself when to update.
 
 ## What runs, and when
 
-`.github/workflows/sync-upstream.yml` runs **every three hours**, and on demand.
+`.github/workflows/sync-upstream.yml` runs **every ten minutes**, and on demand.
 
 1. Ask `ventoy/Ventoy` what its default branch is called.
 2. Compare it with ours.
@@ -19,8 +19,23 @@ So this fork never decides for itself when to update.
 5. If either is true, rebuild every blob, twice.
 6. If the rebuild succeeds, sign and publish a release.
 
-Upstream releases a few times a year and commits in bursts. Three hours is often
-enough that nobody notices the lag and rare enough to cost almost nothing.
+GitHub Actions is free and unlimited on public repositories, so this is not a
+question of budget. A tick that finds nothing costs about forty seconds of
+runner time, and nothing further happens unless upstream has actually moved.
+
+Three things stop this being a promise of ten minute latency, and they are worth
+knowing before relying on it:
+
+- GitHub queues scheduled workflows and delays or drops them under load. A
+  `*/10` schedule is a request rather than a guarantee.
+- Five minutes is the documented floor, and ten is close enough to it that
+  asking for less would mostly produce skipped runs.
+- Scheduled workflows are disabled after 60 days with no repository activity.
+  Merges from this workflow count as activity, so tracking an active upstream
+  keeps itself awake. Tracking a dormant one will eventually need a manual run.
+
+Pile-ups take care of themselves. The concurrency group keeps at most one
+pending run, so a long rebuild does not accumulate a queue of ticks behind it.
 
 ## Why it asks for the branch name
 
@@ -44,8 +59,8 @@ from. History that is rewritten three times a day cannot support that.
 
 ## What happens when a merge conflicts
 
-It stops, changes nothing, and opens one issue. Not a new issue every three
-hours: it reopens and comments on the existing one, labelled `upstream-sync`.
+It stops, changes nothing, and opens one issue. Not a new issue every ten
+minutes: it reopens and comments on the existing one, labelled `upstream-sync`.
 
 It does not attempt a resolution. This is a repository full of bootloaders, and
 an automatic merge that nobody read is the exact thing the project exists to

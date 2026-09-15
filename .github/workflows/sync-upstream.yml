@@ -3,7 +3,7 @@
 # Keep this fork level with ventoy/Ventoy, for ever, without a person having to
 # remember.
 #
-# # What this does every three hours
+# # What this does every ten minutes
 #
 #   1. Fetches ventoy/Ventoy and compares its default branch with ours.
 #   2. If upstream has moved, merges it into `main`.
@@ -30,10 +30,29 @@ name: sync-upstream
 
 on:
   schedule:
-    # Every three hours. Upstream releases a few times a year and commits in
-    # bursts; three hours is often enough that nobody notices the lag and rare
-    # enough that it costs almost nothing.
-    - cron: '17 */3 * * *'
+    # Every ten minutes.
+    #
+    # GitHub Actions is free and unlimited on public repositories, so cadence
+    # here is not a question of budget. What a tick actually costs is about
+    # forty seconds of runner time for a fetch and a comparison, and it does
+    # nothing further unless upstream has genuinely moved.
+    #
+    # Three caveats, so nobody reads this as a promise of ten minute latency:
+    #
+    #   * GitHub queues scheduled workflows and drops or delays them under load.
+    #     A `*/10` schedule is a request, not a guarantee, and during busy
+    #     periods it will run less often than it says.
+    #   * Five minutes is the documented floor. Ten is close enough to it that
+    #     asking for less would mostly produce skipped runs.
+    #   * Scheduled workflows are disabled automatically after 60 days with no
+    #     repository activity. Merges from this workflow count, so a project
+    #     tracking an active upstream stays awake on its own; one tracking a
+    #     dormant upstream will eventually need a manual nudge.
+    #
+    # Pile-ups take care of themselves: the concurrency group below keeps at
+    # most one pending run, so a long rebuild does not accumulate a queue of
+    # ticks behind it.
+    - cron: '*/10 * * * *'
   workflow_dispatch:
     inputs:
       force_release:
@@ -166,7 +185,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           files=$(cat /tmp/conflicts 2>/dev/null || echo 'unknown')
-          # One issue, reopened, rather than a new one every three hours.
+          # One issue, reopened, rather than a new one every ten minutes.
           existing=$(gh issue list --state open --label upstream-sync \
                        --json number --jq '.[0].number' || true)
           body=$(printf '%s\n' \

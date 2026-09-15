@@ -205,7 +205,7 @@ about aarch64, and the manifest never implies otherwise.
 
 ## Staying level with upstream
 
-A scheduled workflow checks `ventoy/Ventoy` **every three hours**. When upstream
+A scheduled workflow checks `ventoy/Ventoy` **every ten minutes**. When upstream
 commits, this fork merges and rebuilds. When upstream publishes a release, this
 fork builds and publishes a matching one tagged `<upstream tag>+repro.N`, so you
 can always tell which Ventoy you are holding.

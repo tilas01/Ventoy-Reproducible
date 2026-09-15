@@ -172,7 +172,12 @@ jobs:
           - { os: windows-2022,  target: x86_64-pc-windows-msvc }
           - { os: windows-2022,  target: aarch64-pc-windows-msvc,   no-test: true }
           - { os: macos-14,      target: aarch64-apple-darwin }
-          - { os: macos-13,      target: x86_64-apple-darwin }
+          # Built on Apple Silicon rather than on `macos-13`, which no longer
+          # has runners: that job sat queued for the full 24 hour maximum and
+          # was cancelled, twice, while every other label started in seconds.
+          # A cancelled job is not a failed one, so nothing reported an error;
+          # it simply blocked the release job that needed it.
+          - { os: macos-14,      target: x86_64-apple-darwin, no-test: true }
     steps:
       - uses: actions/checkout@v5
 

@@ -265,7 +265,7 @@ release page is untrusted input.
 
 ### 3.7 Staying level with upstream
 
-A scheduled workflow checks `ventoy/Ventoy` every three hours, merges new
+A scheduled workflow checks `ventoy/Ventoy` every ten minutes, merges new
 commits, and rebuilds. It asks upstream what its default branch is called rather
 than assuming, because projects rename and a hardcoded name fails silently by
 syncing nothing for months.
@@ -326,6 +326,12 @@ If you read only one section, read this one.
    what a compromise there could achieve; it does not eliminate it.
 8. Signing happens after the build and is not part of the reproducible artefact.
    Verify the hash first, then the signature over the hash file.
+9. **The builder image installs packages by name, not by hash.** The container
+   is pinned by digest and its Dockerfile is in the repository, but the `yum
+   install` inside it names packages without versions. That is reproducible in
+   practice only because CentOS 7 is end of life and vault.centos.org is frozen,
+   which is a property of the archive rather than of this project. Pinning every
+   RPM by checksum is the honest next step and has not been done.
 
 ---
 
