@@ -64,6 +64,14 @@ vterr() {
 }
 
 
+ventoy_copy_file() {
+    cp -a "$1" "$2"
+    if [ -n "$3" ]; then
+        chmod $3 "$2"
+    fi
+}
+
+
 is_ventoy_hook_finished() {
     [ -e $VTOY_PATH/hook_finish ]
 }
@@ -77,7 +85,7 @@ set_ventoy_hook_finish() {
         echo "### iso part dm cmd" >> $VTLOG
         $CAT /ventoy/ventoy_iso_part_dm_cmd >> $VTLOG        
         $BUSYBOX_PATH/sh /ventoy/ventoy_iso_part_dm_cmd >>$VTLOG 2>&1        
-        #$BUSYBOX_PATH/rm -f /ventoy/ventoy_iso_part_dm_cmd
+        $BUSYBOX_PATH/mv /ventoy/ventoy_iso_part_dm_cmd  /ventoy/ventoy_iso_part_dm_cmd_bk
     fi
 }
 
@@ -273,11 +281,37 @@ create_ventoy_device_mapper() {
     else
         $VT_DM_BIN "$2" create ventoy $VTOY_PATH/ventoy_dm_table >>$VTLOG 2>&1
     fi
-    
+
     RAWDISKNAME=$($HEAD -n1 $VTOY_PATH/ventoy_raw_table | $AWK '{print $4}')    
-    echo "$VT_DM_BIN create  ${RAWDISKNAME#/dev/}  $VTOY_PATH/ventoy_raw_table"  > /ventoy/ventoy_iso_part_dm_cmd    
-    #echo "$VT_DM_BIN mknodes ${RAWDISKNAME#/dev/}"                              >> /ventoy/ventoy_iso_part_dm_cmd    
-    #echo "$VT_DM_BIN ls"                                                        >> /ventoy/ventoy_iso_part_dm_cmd    
+    echo "$VT_DM_BIN create  VentoyPart  $VTOY_PATH/ventoy_raw_table"  >  /ventoy/ventoy_iso_part_dm_cmd
+    echo "echo 1 > $VTOY_PATH/ventoy_raw_dm_done"                      >> /ventoy/ventoy_iso_part_dm_cmd
+}
+
+create_ventoy_loop_device_mapper() {
+    vtLoop1=${1#/dev/}
+    vtLoop2=${2#/dev/}
+    
+    vtlog "create_ventoy_loop_device_mapper $*"
+    
+    VT_DM_BIN=$(ventoy_find_bin_path dmsetup)
+    if [ -z "$VT_DM_BIN" ]; then
+        vtlog "no dmsetup avaliable, lastly try inbox dmsetup"
+        VT_DM_BIN=$VTOY_PATH/tool/dmsetup
+    fi
+    
+    vtlog "dmsetup avaliable in system $VT_DM_BIN"
+
+    if ventoy_check_dm_module; then
+        vtlog "device-mapper module check success"
+    else
+        vterr "Error: no dm module avaliable"
+    fi
+
+    vtLoop2Size=$(cat /sys/block/$vtLoop2/size)
+    echo "0 65 linear $1 0" > $VTOY_PATH/ventoy_dm_table
+    echo "65 $vtLoop2Size linear $2 0" >> $VTOY_PATH/ventoy_dm_table
+
+    $VT_DM_BIN "--readonly" create ventoy $VTOY_PATH/ventoy_dm_table >>$VTLOG 2>&1
 }
 
 create_ventoy_wrapper_device_mapper() {
@@ -621,7 +655,7 @@ ventoy_udev_disk_common_hook() {
     else
         ventoy_copy_device_mapper "/dev/$1"
     fi
-    
+
     if [ -f $VTOY_PATH/ventoy_persistent_map ]; then
         create_persistent_device_mapper "/dev/$VTDISK"
         ventoy_create_persistent_link
@@ -709,19 +743,22 @@ ventoy_remove_all_dm() {
     fi
 
     vtlog "dmsetup remove ventoy"
-    $VTOY_PATH/tool/dmsetup remove ventoy
+    $VTOY_PATH/tool/dmsetup remove ventoy >> $VTLOG 2>&1
     rm -f /dev/ventoy*
-    
-    if [ -e $VTOY_PATH/ventoy_raw_table ]; then
-        RAWDISKNAME=$($HEAD -n1 $VTOY_PATH/ventoy_raw_table | $AWK '{print $4}')
-        vtlog "dmsetup remove ${RAWDISKNAME#/dev/}"
-        $VTOY_PATH/tool/dmsetup remove ${RAWDISKNAME#/dev/}
+
+    if [ -e $VTOY_PATH/ventoy_raw_dm_done ]; then
+        vtlog "dmsetup remove VentoyPart"
+        $VTOY_PATH/tool/dmsetup remove VentoyPart
         rm -f $VTOY_PATH/ventoy_iso_part_dm_cmd
     fi
 
     if [ -e $VTOY_PATH/persistent_dm_table ]; then
-        vtlog "dmsetup remove vtoy_persistent"
-        $VTOY_PATH/tool/dmsetup remove vtoy_persistent   
+        if $VTOY_PATH/tool/dmsetup ls | $GREP -qw vtoy_persistent; then
+            vtlog "dmsetup remove vtoy_persistent"
+            $VTOY_PATH/tool/dmsetup remove vtoy_persistent
+        else
+            vtlog "no need to remove DM vtoy_persistent"
+        fi
     fi
 }
 
@@ -843,3 +880,191 @@ ventoy_wait_dir() {
         fi
     done
 }
+
+ventoy_load_iso_part_fs_ko() {
+    vtFS=$($VTOY_PATH/tool/vtoydump -s /ventoy/ventoy_os_param)
+    vtlog "ISO part FS is $vtFS"
+    
+    for vtModProbe in /usr/sbin/modprobe /sbin/modprobe /bin/modprobe $BUSYBOX_PATH/modprobe; do
+        if [ -e $vtModProbe ]; then
+            break
+        fi
+    done
+    
+    vtlog "modprobe is $vtModProbe"
+    
+    if [ "$vtFS" = "ext" ]; then    
+        vtlog "modprobe ext2/3/4"
+        $vtModProbe ext2 >> $VTLOG 2>&1
+        $vtModProbe ext3 >> $VTLOG 2>&1
+        $vtModProbe ext4 >> $VTLOG 2>&1
+    elif [ "$vtFS" = "ntfs" ]; then
+        vtlog "modprobe ntfs3"
+        $vtModProbe ntfs3 >> $VTLOG 2>&1
+    elif [ "$vtFS" = "fat" ]; then
+        vtlog "modprobe vfat"
+        $vtModProbe vfat   >> $VTLOG 2>&1      
+    else
+        vtlog "modprobe $vtFS"
+        $vtModProbe $vtFS  >> $VTLOG 2>&1
+    fi
+}
+
+
+ventoy_iso_part_fs_supported() {
+    vtFS=$($VTOY_PATH/tool/vtoydump -s /ventoy/ventoy_os_param)    
+    if [ "$vtFS" = "ext" ]; then
+        vtPattern='ext[2-4]'
+    elif [ "$vtFS" = "fat" ]; then
+        vtPattern='vfat'
+    elif [ "$vtFS" = "ntfs" ]; then
+        vtPattern='ntfs3'
+    else
+        vtPattern="$vtFS"
+    fi
+    
+    vtlog "vtFS=$vtFS Pattern=$vtPattern"
+    if $EGREP -q "$vtPattern" /proc/filesystems; then
+        vtlog "ISO part FS supported OK"
+        $BUSYBOX_PATH/true
+    else
+        vtlog "ISO part FS is NOT supported"
+        $BUSYBOX_PATH/false
+    fi
+}
+
+ventoy_mount_iso_part() {
+    vtDisk=$1
+    vtMnt=$2
+
+    vtlog "mount iso partition $vtDisk"
+
+    if [ -z "$vtMnt" ]; then
+        vtMnt=$VTOY_PATH/tmpmnt
+    fi
+    
+    mkdir -p $vtMnt
+
+    if echo $vtDisk | $EGREP -q "nvme|mmc|nbd"; then
+        vtpart1=${vtDisk}p1
+    else
+        vtpart1=${vtDisk}1
+    fi
+
+    vtFS=$($VTOY_PATH/tool/vtoydump -s /ventoy/ventoy_os_param)    
+    if [ "$vtFS" = "ntfs" ]; then
+        vtlog "mount -t ntfs3 $vtpart1 $vtMnt"
+        mount -t ntfs3 $vtpart1 $vtMnt >> $VTLOG 2>&1
+    elif [ "$vtFS" = "fat" ]; then
+        vtlog "mount -t vfat $vtpart1 $vtMnt"
+        mount -t vfat $vtpart1 $vtMnt >> $VTLOG 2>&1
+    else
+        vtlog "mount $vtpart1 $vtMnt"
+        mount $vtpart1 $vtMnt >> $VTLOG 2>&1
+    fi
+}
+
+
+ventoy_losetup_iso() {
+    vtMnt=$1
+    if [ -z "$vtMnt" ]; then
+        vtMnt=$VTOY_PATH/tmpmnt
+    fi 
+
+    for vtLosetup in /usr/sbin/losetup /sbin/losetup /bin/losetup $BUSYBOX_PATH/losetup; do
+        if [ -e $vtLosetup ]; then
+            break
+        fi
+    done
+
+    vtisoname=$(get_ventoy_iso_name)    
+
+    dd if=/dev/zero of=/ventoy/isoheader.bin bs=512 count=1 >/dev/null 2>&1
+    dd if="${vtMnt}${vtisoname}" bs=512 skip=1 count=64 >>/ventoy/isoheader.bin  2>>/dev/null
+
+    vtfreeloop1=$($vtLosetup -f)
+    if $vtLosetup -r $vtfreeloop1 /ventoy/isoheader.bin >> $VTLOG 2>&1; then    
+        vtfreeloop2=$($vtLosetup -f)
+        if $vtLosetup -r --offset=33280 $vtfreeloop2 "${vtMnt}${vtisoname}" >> $VTLOG 2>&1; then
+            echo -n "$vtfreeloop1 $vtfreeloop2" > /ventoy/vtoy_dm_loop_dev
+        fi
+    fi
+}
+
+
+ventoy_mount_iso() {
+    if [ "$1" = "ko" ]; then
+        shift
+        ventoy_load_iso_part_fs_ko
+    fi
+    if ventoy_iso_part_fs_supported; then
+        if ventoy_mount_iso_part $1; then
+            if ventoy_losetup_iso; then
+                create_ventoy_loop_device_mapper $($CAT /ventoy/vtoy_dm_loop_dev)
+                return
+            else
+                vtlog "losetup ISO file FAILED"
+            fi
+        else
+            vtlog "mount iso partition FAILED"
+        fi
+    fi
+
+    $BUSYBOX_PATH/false
+}
+
+ventoy_init_udev_auto_rules() {
+    ventoy_copy_file /ventoy/hook/default/11-ventoy-dm.rules  /etc/udev/rules.d/11-ventoy-dm.rules  0644
+}
+
+ventoy_copy_udev_auto_rules() {
+    if ! [ -e $VTOY_PATH/ventoy_raw_dm_done ]; then
+        vtlog "ventoy_raw_dm_done not exist, no need for udev auto rule"
+        return
+    fi
+
+    vtlog "==== Copy udev auto rules ===="
+    for vroot in sysroot newroot new_root root; do
+        if [ -d $vroot/etc/udev/rules.d ]; then
+            cp -a /ventoy/hook/default/90-ventoy-auto.rules /ventoy/udevtmp.rules
+        
+            vtDM=$($VTOY_PATH/tool/dmsetup info VentoyPart | $GREP Major | $SED "s/.*[^0-9]\([0-9][0-9]*\)$/\1/")
+            $SED "s/DMXXX/dm-${vtDM}/g" -i /ventoy/udevtmp.rules
+
+            vtRAWDISKNAME=$($HEAD -n1 $VTOY_PATH/ventoy_raw_table | $AWK '{print $4}')
+            $SED "s/yyy/${vtRAWDISKNAME#/dev/}/g" -i /ventoy/udevtmp.rules
+
+            vtlog "VentoyPart is /dev/dm-${vtDM} map to $vtRAWDISKNAME"
+
+            ventoy_copy_file /ventoy/udevtmp.rules  $vroot/etc/udev/rules.d/90-ventoy-auto.rules  0644
+            ventoy_copy_file /ventoy/udevtmp.rules  $vroot/etc/udev/rules.d/11-ventoy-auto.rules  0644
+            
+            if [ -d $vroot/etc/systemd/system/sysinit.target.wants ]; then
+                vtlog "copy udev trigger service"
+                cp -a /ventoy/hook/default/ventoy-udev-trigger.service /ventoy/udevtmp.service
+                $SED "s/DMXXX/dm-${vtDM}/g" -i /ventoy/udevtmp.service
+                ventoy_copy_file /ventoy/udevtmp.service  $vroot/etc/systemd/system/ventoy-udev-trigger.service  0644
+                
+                mkdir -p $vroot/etc/systemd/system-preset
+                echo 'enable ventoy-udev-trigger.service' > $vroot/etc/systemd/system-preset/80-ventoy-udev.preset
+
+                $BUSYBOX_PATH/ln -sf /etc/systemd/system/ventoy-udev-trigger.service $vroot/etc/systemd/system/sysinit.target.wants/ventoy-udev-trigger.service
+            else
+                vtlog "sysinit wants dir not exist"
+            fi
+
+            break
+        fi
+    done
+}
+
+ventoy_dracut_pivot_udev_rule() {
+    echo "#!/bin/sh" > $VT_DRACUT_HOOKS/pre-pivot/99-ventoy-udev-rules.sh
+    echo "/ventoy/busybox/sh $VTOY_PATH/hook/default/ventoy-pivot-udev-rule.sh" >> $VT_DRACUT_HOOKS/pre-pivot/99-ventoy-udev-rules.sh
+}
+
+ventoy_dracut_pivot_selinux_off() {
+    echo "#!/bin/sh" > $VT_DRACUT_HOOKS/pre-pivot/99-ventoy-selinux-off.sh
+    echo "/ventoy/busybox/sh $VTOY_PATH/hook/default/ventoy-pivot-selinux-off.sh" >> $VT_DRACUT_HOOKS/pre-pivot/99-ventoy-selinux-off.sh
+}
+
